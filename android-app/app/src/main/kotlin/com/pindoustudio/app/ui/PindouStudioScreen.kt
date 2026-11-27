@@ -73,11 +73,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.pindoustudio.app.R
 import com.pindoustudio.app.model.BeadBrand
 import com.pindoustudio.app.model.BeadDiameter
 import com.pindoustudio.app.model.ConvertMode
@@ -124,7 +126,16 @@ fun PindouStudioScreen(viewModel: PindouViewModel) {
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = CraftSurface),
                 title = {
                     Column {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                            Image(
+                                painter = painterResource(R.drawable.ic_brand_logo),
+                                contentDescription = "豆绘工坊 Logo",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .clip(RoundedCornerShape(7.dp))
+                                    .border(1.dp, HairlineBorder, RoundedCornerShape(7.dp))
+                            )
                             Text("豆绘工坊", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = InkCharcoal)
                             Surface(color = TerracottaSoft, shape = RoundedCornerShape(99.dp)) {
                                 Text(
