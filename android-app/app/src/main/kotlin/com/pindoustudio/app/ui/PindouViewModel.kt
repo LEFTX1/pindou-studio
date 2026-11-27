@@ -42,6 +42,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 data class PindouUiState(
     val activeTab: MainTab = MainTab.CANVAS,
@@ -69,6 +70,7 @@ data class PindouUiState(
     val convertMode: ConvertMode = ConvertMode.CUTOUT_OUTLINE,
     val targetWidth: Int = 40,
     val targetHeight: Int = 40,
+    val lockConvertAspect: Boolean = true,
     val maxColors: Int = 14,
     val suppressGreenCast: Boolean = true,
     val smoothEyes: Boolean = true,
@@ -366,6 +368,17 @@ class PindouViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private fun computeAspectGrid(bmpW: Int, bmpH: Int, longestEdge: Int): Pair<Int, Int> {
+        val edge = longestEdge.coerceIn(16, 96)
+        val w = bmpW.coerceAtLeast(1)
+        val h = bmpH.coerceAtLeast(1)
+        return if (w >= h) {
+            edge to (edge * h.toFloat() / w).roundToInt().coerceIn(12, 96)
+        } else {
+            (edge * w.toFloat() / h).roundToInt().coerceIn(12, 96) to edge
+        }
+    }
+
     fun setConvertSourceUri(uri: Uri) {
         viewModelScope.launch {
             val ctx = getApplication<Application>()
@@ -375,13 +388,19 @@ class PindouViewModel(application: Application) : AndroidViewModel(application) 
                 decoded to cleanName
             }
             if (bmp != null) {
-                _uiState.update {
-                    it.copy(
+                _uiState.update { st ->
+                    val longest = maxOf(st.targetWidth, st.targetHeight)
+                    val (gw, gh) = if (st.lockConvertAspect) {
+                        computeAspectGrid(bmp.width, bmp.height, longest)
+                    } else st.targetWidth to st.targetHeight
+                    st.copy(
                         convertOriginalBmp = bmp,
                         convertPreviewBmp = bmp,
                         isConvertCropped = false,
                         showConvertCropDialog = true,
-                        convertSourceName = name
+                        convertSourceName = name,
+                        targetWidth = gw,
+                        targetHeight = gh
                     )
                 }
             } else {
@@ -404,12 +423,18 @@ class PindouViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun applyConvertCrop(cropped: Bitmap) {
-        _uiState.update {
-            it.copy(
+        _uiState.update { st ->
+            val longest = maxOf(st.targetWidth, st.targetHeight)
+            val (gw, gh) = if (st.lockConvertAspect) {
+                computeAspectGrid(cropped.width, cropped.height, longest)
+            } else st.targetWidth to st.targetHeight
+            st.copy(
                 convertPreviewBmp = cropped,
                 isConvertCropped = true,
                 showConvertCropDialog = false,
-                toastMessage = "已框选区域（${cropped.width}×${cropped.height} px）"
+                targetWidth = gw,
+                targetHeight = gh,
+                toastMessage = "已框选 ${cropped.width}×${cropped.height} px · 匹配 ${gw}×${gh} 格"
             )
         }
     }
@@ -417,12 +442,38 @@ class PindouViewModel(application: Application) : AndroidViewModel(application) 
     fun resetConvertCropToOriginal() {
         _uiState.update { st ->
             val orig = st.convertOriginalBmp ?: st.convertPreviewBmp
+            val longest = maxOf(st.targetWidth, st.targetHeight)
+            val (gw, gh) = if (st.lockConvertAspect && orig != null) {
+                computeAspectGrid(orig.width, orig.height, longest)
+            } else st.targetWidth to st.targetHeight
             st.copy(
                 convertPreviewBmp = orig,
                 isConvertCropped = false,
                 showConvertCropDialog = false,
+                targetWidth = gw,
+                targetHeight = gh,
                 toastMessage = "已恢复原图范围"
             )
+        }
+    }
+
+    fun selectLongestEdgePreset(edge: Int) {
+        _uiState.update { st ->
+            val bmp = st.convertPreviewBmp
+            val (gw, gh) = if (st.lockConvertAspect && bmp != null) {
+                computeAspectGrid(bmp.width, bmp.height, edge)
+            } else edge.coerceIn(12, 96) to edge.coerceIn(12, 96)
+            st.copy(targetWidth = gw, targetHeight = gh)
+        }
+    }
+
+    fun toggleLockConvertAspect(locked: Boolean) {
+        _uiState.update { st ->
+            val bmp = st.convertPreviewBmp
+            val (gw, gh) = if (locked && bmp != null) {
+                computeAspectGrid(bmp.width, bmp.height, maxOf(st.targetWidth, st.targetHeight))
+            } else st.targetWidth to st.targetHeight
+            st.copy(lockConvertAspect = locked, targetWidth = gw, targetHeight = gh)
         }
     }
 
@@ -434,6 +485,7 @@ class PindouViewModel(application: Application) : AndroidViewModel(application) 
         mode: ConvertMode = _uiState.value.convertMode,
         width: Int = _uiState.value.targetWidth,
         height: Int = _uiState.value.targetHeight,
+        lockAspect: Boolean = _uiState.value.lockConvertAspect,
         maxColors: Int = _uiState.value.maxColors,
         suppressGreenCast: Boolean = _uiState.value.suppressGreenCast,
         smoothEyes: Boolean = _uiState.value.smoothEyes,
@@ -444,6 +496,7 @@ class PindouViewModel(application: Application) : AndroidViewModel(application) 
                 convertMode = mode,
                 targetWidth = width.coerceIn(12, 96),
                 targetHeight = height.coerceIn(12, 96),
+                lockConvertAspect = lockAspect,
                 maxColors = maxColors.coerceIn(4, 32),
                 suppressGreenCast = suppressGreenCast,
                 smoothEyes = smoothEyes,

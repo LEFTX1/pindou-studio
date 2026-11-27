@@ -85,6 +85,7 @@ import com.pindoustudio.app.model.DOMESTIC_BOARD_PRESETS
 import com.pindoustudio.app.model.DrawTool
 import com.pindoustudio.app.model.MainTab
 import com.pindoustudio.app.model.ViewMode
+import com.pindoustudio.app.model.calcPhysicalSpec
 import com.pindoustudio.app.ui.theme.CraftSurface
 import com.pindoustudio.app.ui.theme.HairlineBorder
 import com.pindoustudio.app.ui.theme.InkCharcoal
@@ -94,6 +95,7 @@ import com.pindoustudio.app.ui.theme.SageCompletion
 import com.pindoustudio.app.ui.theme.SageSoft
 import com.pindoustudio.app.ui.theme.TerracottaAccent
 import com.pindoustudio.app.ui.theme.TerracottaSoft
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -933,7 +935,22 @@ private fun PhotoConvertTab(
             }
         }
 
-        Text("国内拼板尺寸预设", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        val targetSpec = calcPhysicalSpec(state.targetWidth, state.targetHeight, state.diameter)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("目标拼豆尺寸", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Text(
+                "${state.targetWidth}×${state.targetHeight}格 · 约 ${targetSpec.widthCm}×${targetSpec.heightCm}cm",
+                fontSize = 11.5.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.SemiBold,
+                color = TerracottaAccent
+            )
+        }
+        val longestEdgeNow = max(state.targetWidth, state.targetHeight)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -942,9 +959,14 @@ private fun PhotoConvertTab(
         ) {
             DOMESTIC_BOARD_PRESETS.forEach { p ->
                 FilterChip(
-                    selected = state.targetWidth == p.width && state.targetHeight == p.height,
-                    onClick = { viewModel.updateConvertSettings(width = p.width, height = p.height) },
-                    label = { Text("${p.width}×${p.height}", fontFamily = FontFamily.Monospace) }
+                    selected = longestEdgeNow == p.width,
+                    onClick = { viewModel.selectLongestEdgePreset(p.width) },
+                    label = {
+                        Text(
+                            if (state.lockConvertAspect) "最长边 ${p.width}格" else "${p.width}×${p.height}",
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
                 )
             }
         }
@@ -954,6 +976,36 @@ private fun PhotoConvertTab(
             border = BorderStroke(1.dp, HairlineBorder)
         ) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("按裁剪比例自适应长方形格数", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                    Switch(
+                        checked = state.lockConvertAspect,
+                        onCheckedChange = viewModel::toggleLockConvertAspect
+                    )
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("宽度格数", fontSize = 12.sp, color = InkMuted)
+                    Text("${state.targetWidth} 格", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = InkCharcoal)
+                }
+                Slider(
+                    value = state.targetWidth.toFloat(),
+                    onValueChange = { viewModel.updateConvertSettings(width = it.roundToInt(), lockAspect = false) },
+                    valueRange = 12f..96f
+                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("高度格数", fontSize = 12.sp, color = InkMuted)
+                    Text("${state.targetHeight} 格", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = InkCharcoal)
+                }
+                Slider(
+                    value = state.targetHeight.toFloat(),
+                    onValueChange = { viewModel.updateConvertSettings(height = it.roundToInt(), lockAspect = false) },
+                    valueRange = 12f..96f
+                )
+                HorizontalDivider(color = HairlineBorder)
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("最大用色上限", fontWeight = FontWeight.SemiBold)
                     Text("${state.maxColors} 色", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = TerracottaAccent)

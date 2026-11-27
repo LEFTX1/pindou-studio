@@ -1,14 +1,14 @@
 {
-  "versionCode": 6,
-  "versionName": "1.2.3",
+  "versionCode": 7,
+  "versionName": "1.2.4",
   "forceUpdate": false,
-  "sha256": "9fe4783cda2b69131e88747ed88ed00fd25f8763c0a949c43758903ced2797f4",
-  "sizeBytes": 4378589,
-  "changelog": "1. 图片导入全面支持交互式放大与自由框选区域：支持双指缩放、1×~4× 快捷倍率、90° 旋转、自由/1:1/3:4/4:3 比例裁剪及拖拽微调构图；2. 覆盖「图片转图」（选图后自动弹出框选，预览图随时重调）与「历史图纸 / 成品照智能识别」（放大框选目标局部后重跑识别）两大入口；3. 新增 EXIF 拍照方向自动矫正，竖拍/横拍照片导入不倒置。",
+  "sha256": "31ac807ae1cf42d174c68843e8ec3dcc2d3db90a0bc120457271c39ccdba01f6",
+  "sizeBytes": 4378593,
+  "changelog": "1. 放大框选全面升级为长方形自由拉伸裁剪：默认「自由拉伸」模式，强化四边加粗胶囊把手与 32dp 触发区，新增 16:9 / 9:16 比例及实时宽高比显示，并优化放大缩回边界约束；2. 拼豆网格尺寸不再强制正方形：支持「按裁剪比例自适应长方形格数」（如框选 2:1 自动匹配 40×20 格），并新增独立宽度/高度滑块（12~96格）与实时物理厘米显示。",
   "apkMirrors": [
-    "https://ghfast.top/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.3/pindou-studio-v1.2.3-release.apk",
-    "https://gh-proxy.com/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.3/pindou-studio-v1.2.3-release.apk",
-    "https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.3/pindou-studio-v1.2.3-release.apk"
+    "https://ghfast.top/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.4/pindou-studio-v1.2.4-release.apk",
+    "https://gh-proxy.com/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.4/pindou-studio-v1.2.4-release.apk",
+    "https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.4/pindou-studio-v1.2.4-release.apk"
   ],
   "fallbackPageUrl": "https://github.com/LEFTX1/pindou-studio/releases"
 }

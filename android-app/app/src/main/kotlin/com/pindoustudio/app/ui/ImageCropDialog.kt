@@ -63,10 +63,12 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 private enum class CropAspectRatio(val label: String, val ratio: Float?) {
-    FREE("自由", null),
+    FREE("自由拉伸", null),
     SQUARE("1:1", 1f),
+    LANDSCAPE_4_3("4:3", 4f / 3f),
     PORTRAIT_3_4("3:4", 3f / 4f),
-    LANDSCAPE_4_3("4:3", 4f / 3f)
+    LANDSCAPE_16_9("16:9", 16f / 9f),
+    PORTRAIT_9_16("9:16", 9f / 16f)
 }
 
 private enum class CropDragTarget {
@@ -112,7 +114,7 @@ fun ImageCropDialog(
 
     val density = LocalDensity.current
     val padPx = with(density) { 20.dp.toPx() }
-    val hitRadiusPx = with(density) { 28.dp.toPx() }
+    val hitRadiusPx = with(density) { 32.dp.toPx() }
     val minCropFloorPx = with(density) { 64.dp.toPx() }
 
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
@@ -195,10 +197,7 @@ fun ImageCropDialog(
     fun applyZoomAnchored(targetZoom: Float, anchorX: Float, anchorY: Float) {
         if (viewSize.width <= 0 || viewSize.height <= 0) return
         val bs = baseScaleOf(workingBmp, viewSize)
-        val minZoomForCrop = if (cropR > cropL && cropB > cropT) {
-            max(1f, max((cropR - cropL) / (workingBmp.width * bs), (cropB - cropT) / (workingBmp.height * bs)))
-        } else 1f
-        val clampedZoom = targetZoom.coerceIn(minZoomForCrop, 6f)
+        val clampedZoom = targetZoom.coerceIn(1f, 6f)
         val oldScale = bs * zoom
         val newScale = bs * clampedZoom
         val oldLeft = (viewSize.width - workingBmp.width * oldScale) * 0.5f + panX
@@ -210,6 +209,30 @@ fun ImageCropDialog(
         zoom = clampedZoom
         panX = newLeft - (viewSize.width - workingBmp.width * newScale) * 0.5f
         panY = newTop - (viewSize.height - workingBmp.height * newScale) * 0.5f
+
+        val nb = imageBounds(workingBmp, viewSize, zoom, panX, panY)
+        val safeL = max(padPx, nb[0])
+        val safeT = max(padPx, nb[1])
+        val safeR = min(viewSize.width - padPx, nb[2])
+        val safeB = min(viewSize.height - padPx, nb[3])
+        val maxAvailW = max(32f, safeR - safeL)
+        val maxAvailH = max(32f, safeB - safeT)
+        if (cropR > cropL && cropB > cropT) {
+            var cw = (cropR - cropL).coerceAtMost(maxAvailW)
+            var ch = (cropB - cropT).coerceAtMost(maxAvailH)
+            val ar = aspectRatio.ratio
+            if (ar != null) {
+                if (cw / ch > ar) cw = ch * ar else ch = cw / ar
+                if (cw > maxAvailW) { cw = maxAvailW; ch = cw / ar }
+                if (ch > maxAvailH) { ch = maxAvailH; cw = ch * ar }
+            }
+            val nxL = cropL.coerceIn(safeL, max(safeL, safeR - cw))
+            val nxT = cropT.coerceIn(safeT, max(safeT, safeB - ch))
+            cropL = nxL
+            cropT = nxT
+            cropR = nxL + cw
+            cropB = nxT + ch
+        }
         clampPanToCrop(workingBmp, viewSize, zoom)
     }
 
@@ -262,7 +285,7 @@ fun ImageCropDialog(
                             fontSize = 15.sp
                         )
                         Text(
-                            "框选 ${selPxW}×${selPxH} px · ${"%.1f".format(zoom)}×",
+                            "框选 ${selPxW}×${selPxH} px (${"%.2f".format(selPxW.toFloat() / selPxH.coerceAtLeast(1))}:1) · ${"%.1f".format(zoom)}×",
                             color = Color(0xFFE0B49F),
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace
@@ -576,14 +599,20 @@ fun ImageCropDialog(
                         drawLine(cornerColor, Offset(cropR, cropB), Offset(cropR - cornerArm, cropB), cornerStroke, StrokeCap.Round)
                         drawLine(cornerColor, Offset(cropR, cropB), Offset(cropR, cropB - cornerArm), cornerStroke, StrokeCap.Round)
 
-                        // 四边中点把手条
-                        val barHalf = min(14.dp.toPx(), min(cw, ch) * 0.22f)
+                        // 四边中点加粗胶囊拉伸把手（清晰提示可自由拉伸长宽）
+                        val barHalf = min(15.dp.toPx(), min(cw, ch) * 0.24f)
+                        val barOuterStroke = 6.dp.toPx()
+                        val barInnerStroke = 4.dp.toPx()
                         val midX = (cropL + cropR) * 0.5f
                         val midY = (cropT + cropB) * 0.5f
-                        drawLine(Color.White, Offset(midX - barHalf, cropT), Offset(midX + barHalf, cropT), cornerStroke, StrokeCap.Round)
-                        drawLine(Color.White, Offset(midX - barHalf, cropB), Offset(midX + barHalf, cropB), cornerStroke, StrokeCap.Round)
-                        drawLine(Color.White, Offset(cropL, midY - barHalf), Offset(cropL, midY + barHalf), cornerStroke, StrokeCap.Round)
-                        drawLine(Color.White, Offset(cropR, midY - barHalf), Offset(cropR, midY + barHalf), cornerStroke, StrokeCap.Round)
+                        drawLine(Color(0x99141312), Offset(midX - barHalf, cropT), Offset(midX + barHalf, cropT), barOuterStroke, StrokeCap.Round)
+                        drawLine(Color(0x99141312), Offset(midX - barHalf, cropB), Offset(midX + barHalf, cropB), barOuterStroke, StrokeCap.Round)
+                        drawLine(Color(0x99141312), Offset(cropL, midY - barHalf), Offset(cropL, midY + barHalf), barOuterStroke, StrokeCap.Round)
+                        drawLine(Color(0x99141312), Offset(cropR, midY - barHalf), Offset(cropR, midY + barHalf), barOuterStroke, StrokeCap.Round)
+                        drawLine(Color.White, Offset(midX - barHalf, cropT), Offset(midX + barHalf, cropT), barInnerStroke, StrokeCap.Round)
+                        drawLine(Color.White, Offset(midX - barHalf, cropB), Offset(midX + barHalf, cropB), barInnerStroke, StrokeCap.Round)
+                        drawLine(Color.White, Offset(cropL, midY - barHalf), Offset(cropL, midY + barHalf), barInnerStroke, StrokeCap.Round)
+                        drawLine(Color.White, Offset(cropR, midY - barHalf), Offset(cropR, midY + barHalf), barInnerStroke, StrokeCap.Round)
                     }
                 }
 
@@ -623,13 +652,15 @@ fun ImageCropDialog(
                         }
                     }
 
-                    // 比例预设 + 手势提示
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // 比例预设（支持横向滚动）+ 手势说明
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             CropAspectRatio.entries.forEach { rOpt ->
                                 CropControlPill(rOpt.label, highlighted = aspectRatio == rOpt) {
                                     aspectRatio = rOpt
@@ -638,7 +669,7 @@ fun ImageCropDialog(
                             }
                         }
                         Text(
-                            "双指放大 · 拖角框选",
+                            "拖四边/四角自由拉伸长宽 · 双指捏合放大 · 放大后可拖动底图",
                             color = Color(0xFFB5ACA4),
                             fontSize = 10.5.sp
                         )
