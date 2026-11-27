@@ -78,6 +78,9 @@ data class PindouUiState(
     val appVersionName: String = "1.0",
     val appVersionCode: Long = 1L,
     val isCheckingUpdate: Boolean = false,
+    val hasAvailableUpdate: Boolean = false,
+    val updateCheckStatusText: String? = null,
+    val showAboutUpdateDialog: Boolean = false,
     val updateManifest: UpdateManifest? = null,
     val updateProgress: Float? = null,
     val downloadedApk: File? = null,
@@ -635,31 +638,80 @@ class PindouViewModel(application: Application) : AndroidViewModel(application) 
             }
             return
         }
-        _uiState.update { it.copy(isCheckingUpdate = true, updateError = null) }
+        _uiState.update {
+            it.copy(
+                isCheckingUpdate = true,
+                updateError = null,
+                updateCheckStatusText = if (manual) "正在连接 GitHub / 国内镜像检测新版本…" else it.updateCheckStatusText
+            )
+        }
         viewModelScope.launch {
             val res = withContext(Dispatchers.IO) { AppUpdater.fetchManifest(urls) }
             res.onSuccess { manifest ->
                 val curVer = AppUpdater.getCurrentVersion(getApplication()).versionCode
                 if (manifest.versionCode > curVer) {
+                    val merged = manifest.buildMergedSummary(curVer)
+                    val spanHint = if (merged.skippedCount > 1) {
+                        "发现新版本 v${manifest.versionName}（含中间 ${merged.skippedCount} 个版本更新，一次直达）"
+                    } else {
+                        "发现新版本 v${manifest.versionName}"
+                    }
                     _uiState.update {
                         it.copy(
                             isCheckingUpdate = false,
+                            hasAvailableUpdate = true,
+                            updateCheckStatusText = spanHint,
                             updateManifest = manifest,
                             downloadedApk = null,
                             updateProgress = null,
                             updateError = null,
-                            showUpdateDialog = true
+                            showAboutUpdateDialog = if (manual) false else it.showAboutUpdateDialog,
+                            showUpdateDialog = manual || manifest.forceUpdate
                         )
                     }
                 } else {
-                    _uiState.update { it.copy(isCheckingUpdate = false) }
+                    _uiState.update {
+                        it.copy(
+                            isCheckingUpdate = false,
+                            hasAvailableUpdate = false,
+                            updateCheckStatusText = "当前已是最新版本 v${st.appVersionName}（无需更新）"
+                        )
+                    }
                     if (manual) showToast("当前已是最新版本 v${st.appVersionName}")
                 }
             }.onFailure { err ->
-                _uiState.update { it.copy(isCheckingUpdate = false) }
-                if (manual) showToast("检查更新失败：${err.message ?: "请检查网络"}")
+                val reason = err.message ?: "请检查网络"
+                _uiState.update {
+                    it.copy(
+                        isCheckingUpdate = false,
+                        updateCheckStatusText = if (manual) "检测失败：$reason" else it.updateCheckStatusText
+                    )
+                }
+                if (manual) showToast("检查更新失败：$reason")
             }
         }
+    }
+
+    fun openAboutUpdateDialog() {
+        _uiState.update { it.copy(showAboutUpdateDialog = true) }
+    }
+
+    fun dismissAboutUpdateDialog() {
+        _uiState.update { it.copy(showAboutUpdateDialog = false) }
+    }
+
+    fun openGitHubRepo() {
+        val url = _uiState.value.updateManifest?.repoUrl?.ifBlank { AppUpdater.GITHUB_REPO_URL }
+            ?: AppUpdater.GITHUB_REPO_URL
+        AppUpdater.openUrlInBrowser(getApplication(), url)
+    }
+
+    fun copyGitHubRepoUrl() {
+        val url = _uiState.value.updateManifest?.repoUrl?.ifBlank { AppUpdater.GITHUB_REPO_URL }
+            ?: AppUpdater.GITHUB_REPO_URL
+        val cm = getApplication<Application>().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText("豆绘工坊 GitHub 仓库", url))
+        showToast("已复制仓库地址：$url")
     }
 
     fun startUpdateDownload() {

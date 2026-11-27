@@ -233,6 +233,81 @@ fun ArchivePortfolioTab(
                 )
             }
         }
+
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = CraftSurface),
+                border = BorderStroke(1.dp, HairlineBorder)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "关于豆绘工坊 · 版本与开源主页",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.5.sp,
+                            color = InkCharcoal
+                        )
+                        Text(
+                            "v${state.appVersionName}",
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = TerracottaAccent
+                        )
+                    }
+                    Text(
+                        "GitHub：${com.pindoustudio.app.update.AppUpdater.GITHUB_REPO_URL}",
+                        fontSize = 11.5.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = InkMuted,
+                        modifier = Modifier.clickable { viewModel.openGitHubRepo() }
+                    )
+                    if (!state.updateCheckStatusText.isNullOrBlank()) {
+                        Text(
+                            state.updateCheckStatusText,
+                            fontSize = 11.5.sp,
+                            color = if (state.hasAvailableUpdate) TerracottaAccent else SageCompletion,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { viewModel.checkForUpdate(manual = true) },
+                            enabled = !state.isCheckingUpdate,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = TerracottaAccent),
+                            contentPadding = PaddingValues(vertical = 8.dp)
+                        ) {
+                            Text(
+                                if (state.isCheckingUpdate) "正在检测…" else if (state.hasAvailableUpdate) "立即更新" else "检查更新",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.5.sp
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = viewModel::openGitHubRepo,
+                            modifier = Modifier.weight(1f),
+                            border = BorderStroke(1.dp, TerracottaAccent),
+                            contentPadding = PaddingValues(vertical = 8.dp)
+                        ) {
+                            Text("打开 GitHub", color = TerracottaAccent, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     val lb = lightboxTarget

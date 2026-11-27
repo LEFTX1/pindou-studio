@@ -101,8 +101,8 @@
 
 | 下载渠道 | 适用网络 | 直达链接 |
 | :--- | :--- | :--- |
-| 🚀 **国内加速镜像 1（推荐）** | 国内直连 | [立即下载 v1.2.4 正式签名 APK (ghfast)](https://ghfast.top/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.4/pindou-studio-v1.2.4-release.apk) |
-| ⚡ **国内加速镜像 2（备用）** | 国内直连 | [立即下载 v1.2.4 正式签名 APK (gh-proxy)](https://gh-proxy.com/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.4/pindou-studio-v1.2.4-release.apk) |
+| 🚀 **国内加速镜像 1（推荐）** | 国内直连 | [立即下载 v1.2.5 正式签名 APK (ghfast)](https://ghfast.top/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.5/pindou-studio-v1.2.5-release.apk) |
+| ⚡ **国内加速镜像 2（备用）** | 国内直连 | [立即下载 v1.2.5 正式签名 APK (gh-proxy)](https://gh-proxy.com/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.5/pindou-studio-v1.2.5-release.apk) |
 | 🌐 **GitHub Releases 官方发布页** | 全部版本与更新日志 | [前往 Releases 页面](https://github.com/LEFTX1/pindou-studio/releases/latest) |
 
 ---

@@ -13,6 +13,17 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 
+data class ReleaseHistoryEntry(
+    val versionCode: Long,
+    val versionName: String,
+    val notes: String
+)
+
+data class MergedUpdateSummary(
+    val skippedCount: Int,
+    val mergedChangelog: String
+)
+
 data class UpdateManifest(
     val versionCode: Long,
     val versionName: String,
@@ -20,8 +31,37 @@ data class UpdateManifest(
     val sha256: String,
     val forceUpdate: Boolean,
     val apkMirrors: List<String>,
-    val fallbackPageUrl: String
-)
+    val fallbackPageUrl: String,
+    val repoUrl: String = AppUpdater.GITHUB_REPO_URL,
+    val releaseHistory: List<ReleaseHistoryEntry> = emptyList()
+) {
+    /**
+     * 当用户隔了多个版本（例如 A -> B -> C）才打开 App 时：
+     * 仅下载最新 C 版本安装包一次性直达，同时自动合并展示 A/B/C 期间跳过的所有版本更新亮点。
+     */
+    fun buildMergedSummary(currentVersionCode: Long): MergedUpdateSummary {
+        val missed = releaseHistory
+            .filter { it.versionCode > currentVersionCode }
+            .sortedByDescending { it.versionCode }
+        return when {
+            missed.size >= 2 -> MergedUpdateSummary(
+                skippedCount = missed.size,
+                mergedChangelog = missed.joinToString("\n\n") { entry ->
+                    val cleanNotes = entry.notes.ifBlank { "体验优化与问题修复" }
+                    "【v${entry.versionName}】\n$cleanNotes"
+                }
+            )
+            missed.size == 1 -> MergedUpdateSummary(
+                skippedCount = 1,
+                mergedChangelog = missed.first().notes.ifBlank { changelog }
+            )
+            else -> MergedUpdateSummary(
+                skippedCount = (versionCode - currentVersionCode).toInt().coerceAtLeast(1),
+                mergedChangelog = changelog
+            )
+        }
+    }
+}
 
 data class AppVersionInfo(
     val versionCode: Long,
@@ -38,6 +78,7 @@ object AppUpdater {
 
     const val GITHUB_OWNER = "LEFTX1"
     const val GITHUB_REPO = "pindou-studio"
+    const val GITHUB_REPO_URL = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO"
 
     // 只需推送一次到 GitHub 仓库，国内用户自动依次走多路加速代理 / CDN / 直连拉取更新清单
     val DEFAULT_MANIFEST_URLS = listOf(
@@ -74,27 +115,7 @@ object AppUpdater {
                     val code = conn.responseCode
                     if (code !in 200..299) error("HTTP $code")
                     val text = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-                    val obj = JSONObject(text)
-                    val mirrorsArr = obj.optJSONArray("apkMirrors")
-                    val mirrors = buildList {
-                        if (mirrorsArr != null) {
-                            for (i in 0 until mirrorsArr.length()) {
-                                val u = mirrorsArr.optString(i).trim()
-                                if (u.isNotEmpty() && !u.contains("YOUR_REPO_OWNER")) add(u)
-                            }
-                        }
-                        val single = obj.optString("downloadUrl").trim()
-                        if (single.isNotEmpty() && single !in this && !single.contains("YOUR_REPO_OWNER")) add(single)
-                    }
-                    UpdateManifest(
-                        versionCode = obj.getLong("versionCode"),
-                        versionName = obj.optString("versionName", "新版本"),
-                        changelog = obj.optString("changelog", "优化功能体验并修复已知问题。"),
-                        sha256 = obj.optString("sha256", "").trim().lowercase(),
-                        forceUpdate = obj.optBoolean("forceUpdate", false),
-                        apkMirrors = mirrors,
-                        fallbackPageUrl = obj.optString("fallbackPageUrl", "").trim()
-                    )
+                    parseManifestJson(text)
                 } finally {
                     conn.disconnect()
                 }
@@ -103,6 +124,49 @@ object AppUpdater {
             lastError = attempt.exceptionOrNull()
         }
         return Result.failure(lastError ?: IllegalStateException("未配置或无法访问云端更新清单"))
+    }
+
+    fun parseManifestJson(text: String): UpdateManifest {
+        val obj = JSONObject(text)
+        val mirrorsArr = obj.optJSONArray("apkMirrors")
+        val mirrors = buildList {
+            if (mirrorsArr != null) {
+                for (i in 0 until mirrorsArr.length()) {
+                    val u = mirrorsArr.optString(i).trim()
+                    if (u.isNotEmpty() && !u.contains("YOUR_REPO_OWNER")) add(u)
+                }
+            }
+            val single = obj.optString("downloadUrl").trim()
+            if (single.isNotEmpty() && single !in this && !single.contains("YOUR_REPO_OWNER")) add(single)
+        }
+        val histArr = obj.optJSONArray("releaseHistory")
+        val history = buildList {
+            if (histArr != null) {
+                for (i in 0 until histArr.length()) {
+                    val item = histArr.optJSONObject(i) ?: continue
+                    val vCode = item.optLong("versionCode", -1L)
+                    if (vCode <= 0L) continue
+                    add(
+                        ReleaseHistoryEntry(
+                            versionCode = vCode,
+                            versionName = item.optString("versionName", vCode.toString()),
+                            notes = item.optString("notes", "").trim()
+                        )
+                    )
+                }
+            }
+        }
+        return UpdateManifest(
+            versionCode = obj.getLong("versionCode"),
+            versionName = obj.optString("versionName", "新版本"),
+            changelog = obj.optString("changelog", "优化功能体验并修复已知问题。"),
+            sha256 = obj.optString("sha256", "").trim().lowercase(),
+            forceUpdate = obj.optBoolean("forceUpdate", false),
+            apkMirrors = mirrors,
+            fallbackPageUrl = obj.optString("fallbackPageUrl", "").trim(),
+            repoUrl = obj.optString("repoUrl", GITHUB_REPO_URL).trim().ifBlank { GITHUB_REPO_URL },
+            releaseHistory = history
+        )
     }
 
     fun downloadAndVerifyApk(
@@ -200,7 +264,9 @@ object AppUpdater {
         return true
     }
 
-    fun openFallbackDownloadPage(context: Context, url: String) {
+    fun openFallbackDownloadPage(context: Context, url: String) = openUrlInBrowser(context, url)
+
+    fun openUrlInBrowser(context: Context, url: String) {
         if (url.isBlank()) return
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -219,7 +285,9 @@ object AppUpdater {
             val conn = (URL(current).openConnection() as HttpURLConnection).apply {
                 connectTimeout = connectTimeoutMs
                 readTimeout = readTimeoutMs
+                useCaches = false
                 instanceFollowRedirects = false
+                setRequestProperty("Cache-Control", "no-cache")
                 setRequestProperty("User-Agent", "PindouStudio-Updater/1.0 (Android)")
             }
             val code = conn.responseCode

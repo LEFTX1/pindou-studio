@@ -1,14 +1,42 @@
 {
-  "versionCode": 7,
-  "versionName": "1.2.4",
+  "versionCode": 8,
+  "versionName": "1.2.5",
   "forceUpdate": false,
-  "sha256": "31ac807ae1cf42d174c68843e8ec3dcc2d3db90a0bc120457271c39ccdba01f6",
-  "sizeBytes": 4378593,
-  "changelog": "1. 放大框选全面升级为长方形自由拉伸裁剪：默认「自由拉伸」模式，强化四边加粗胶囊把手与 32dp 触发区，新增 16:9 / 9:16 比例及实时宽高比显示，并优化放大缩回边界约束；2. 拼豆网格尺寸不再强制正方形：支持「按裁剪比例自适应长方形格数」（如框选 2:1 自动匹配 40×20 格），并新增独立宽度/高度滑块（12~96格）与实时物理厘米显示。",
+  "sha256": "18050bf35a3d09b724becd1f87ec5bb880856106ffac8c5b4356db0f6e597ef6",
+  "sizeBytes": 4394977,
+  "repoUrl": "https://github.com/LEFTX1/pindou-studio",
+  "changelog": "1. 优化实拍转图眼部抗锯齿与采样过渡算法：彻底消除 3×3 眼部被切成「十字纽扣眼」的问题，保留自然虹膜/眼睑柔化阴影；2. 升级跨多版本合并推送更新（A→B→C 一次直达最新版）：新增版本历史 `releaseHistory` 合并提示，老版本隔再久打开也能一站式升级至最新版并保留全部作品；3. App 顶栏新增「更新」快捷入口与「关于与开源主页」弹窗，并在作品馆底部新增「检查更新」与 GitHub 开源仓库地址（复制 / 一键直达）。",
+  "releaseHistory": [
+    {
+      "versionCode": 8,
+      "versionName": "1.2.5",
+      "notes": "1. 优化实拍转图眼部抗锯齿与采样过渡算法：彻底消除 3×3 眼部被切成「十字纽扣眼」的问题，保留自然虹膜/眼睑柔化阴影；2. 升级跨多版本合并推送更新（A→B→C 一次直达最新版）：新增版本历史 `releaseHistory` 合并提示，老版本隔再久打开也能一站式升级至最新版并保留全部作品；3. App 顶栏新增「更新」快捷入口与「关于与开源主页」弹窗，并在作品馆底部新增「检查更新」与 GitHub 开源仓库地址（复制 / 一键直达）。"
+    },
+    {
+      "versionCode": 7,
+      "versionName": "1.2.4",
+      "notes": "长方形自由拉伸裁剪 + 自适应长方形拼豆格数与独立宽高滑块"
+    },
+    {
+      "versionCode": 6,
+      "versionName": "1.2.3",
+      "notes": "交互式放大框选弹窗（双指缩放 / 1~4×倍率 / 旋转90°）+ EXIF 方向自动矫正"
+    },
+    {
+      "versionCode": 5,
+      "versionName": "1.2.2",
+      "notes": "修复异形描边猫咪脖颈误切割问题 + 全场景选图默认直达系统原生相册"
+    },
+    {
+      "versionCode": 4,
+      "versionName": "1.2.1",
+      "notes": "上线专属三花猫拼豆 Logo 与自适应图标 + 云端免梯推新验证"
+    }
+  ],
   "apkMirrors": [
-    "https://ghfast.top/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.4/pindou-studio-v1.2.4-release.apk",
-    "https://gh-proxy.com/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.4/pindou-studio-v1.2.4-release.apk",
-    "https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.4/pindou-studio-v1.2.4-release.apk"
+    "https://ghfast.top/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.5/pindou-studio-v1.2.5-release.apk",
+    "https://gh-proxy.com/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.5/pindou-studio-v1.2.5-release.apk",
+    "https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.5/pindou-studio-v1.2.5-release.apk"
   ],
   "fallbackPageUrl": "https://github.com/LEFTX1/pindou-studio/releases"
 }

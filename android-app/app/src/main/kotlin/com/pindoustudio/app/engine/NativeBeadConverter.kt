@@ -414,7 +414,7 @@ object NativeBeadConverter {
             if (ci.bright.isNotEmpty() && ci.area >= 6) confirmedEyes.add(i)
         }
 
-        // 1) 对成对确认的双眼执行「尺寸、形状与色度强对称等大校准」
+        // 1) 对成对确认的双眼执行「尺寸、形状与色度强对称等大校准」（杜绝出现 3×3 十字纽扣眼）
         for ((i, j) in eyePairs) {
             val left = if (candidates[i].cx <= candidates[j].cx) candidates[i] else candidates[j]
             val right = if (candidates[i].cx <= candidates[j].cx) candidates[j] else candidates[i]
@@ -431,12 +431,13 @@ object NativeBeadConverter {
             val dx = abs(left.cx - right.cx)
 
             val maxArea = max(left.area, right.area)
-            if (maxArea <= 4) {
-                // 小格实拍图（如 40x40 / 52x52 全身猫）：彻底抹平因像素网格错位导致的大小眼
+            val avgBh = ((left.bh + right.bh) / 2.0).roundToInt()
+            val avgBw = ((left.bw + right.bw) / 2.0).roundToInt()
+            if (maxArea <= 6 || avgBh <= 3 || avgBw <= 3) {
+                // 小/中格实拍图：使用 1×1 圆点或 2×2 饱满方块瞳孔（配合柔和自然过渡，彻底告别十字纽扣形状）
                 val th: Int
                 val tw: Int
                 if (dx <= 5.2 || maxArea <= 2) {
-                    // 小脸双眸统一校准为 1x1 清晰对称圆瞳
                     th = 1; tw = 1
                 } else {
                     th = 2; tw = 2
@@ -447,9 +448,9 @@ object NativeBeadConverter {
                 stampSymmetricSmallEye(gridCodes, mask, w, h, left, targetR0, left.cx.roundToInt(), th, tw, sharedDarkCode)
                 stampSymmetricSmallEye(gridCodes, mask, w, h, right, rightR0, right.cx.roundToInt(), th, tw, sharedDarkCode)
             } else {
-                // 较大圆眼（>=3x3）：计算统一规范椭圆核心模板，保证左右眼像素颗数、宽高、眼神光位置严格一致
-                val targetH = max(3, ((left.bh + right.bh) / 2.0).roundToInt())
-                val targetW = max(3, ((left.bw + right.bw) / 2.0).roundToInt())
+                // 大圆眼（>=4×4）：统一规范饱满椭圆模板 + 四角柔和抗锯齿 + 眼神光
+                val targetH = max(4, avgBh)
+                val targetW = max(4, avgBw)
                 val sameRow = abs(left.cy - right.cy) <= 1.15
                 val sharedCy = if (sameRow) (left.cy + right.cy) / 2.0 else left.cy
                 stampCanonicalLargeEye(gridCodes, mask, lumGrid, paletteRepo, subPal, usedCodes, w, h, left, targetH, targetW, sharedCy, sharedDarkCode)
@@ -457,10 +458,10 @@ object NativeBeadConverter {
             }
         }
 
-        // 2) 未成对的孤立大圆特征（如鼻头、侧脸单眼）仍走圆形圆润化处理（跳过小 1-2px 孤立杂点）
+        // 2) 未成对的孤立大圆特征（如大特写侧脸单眼 >= 4×4）才做椭圆柔和化；<=3×3 保留自然采样抗锯齿，绝不强制切成「十字」
         for ((cid, feat) in candidates.withIndex()) {
             if (cid in pairedUsed) continue
-            if (feat.bh < 3 || feat.bw < 3) continue
+            if (feat.bh < 4 || feat.bw < 4) continue
             val darkEntry = paletteRepo.findByMardCode(feat.darkCode) ?: continue
 
             val ry = max(1.0, feat.bh / 2.0)
@@ -470,13 +471,8 @@ object NativeBeadConverter {
                 for (cc in feat.c0..feat.c1) {
                     val pos = rr * w + cc
                     if (!mask[pos]) continue
-                    if (feat.bh == 3 && feat.bw == 3) {
-                        if ((rr == feat.r0 || rr == feat.r1) && (cc == feat.c0 || cc == feat.c1)) continue
-                        coreSet.add(pos)
-                    } else {
-                        val d2 = ((rr - feat.cy) / ry).pow(2) + ((cc - feat.cx) / rx).pow(2)
-                        if (d2 <= 0.90) coreSet.add(pos)
-                    }
+                    val d2 = ((rr - feat.cy) / ry).pow(2) + ((cc - feat.cx) / rx).pow(2)
+                    if (d2 <= 0.96) coreSet.add(pos)
                 }
             }
             if (coreSet.isEmpty()) continue
@@ -486,7 +482,6 @@ object NativeBeadConverter {
                 if (pos !in preservedBright) gridCodes[pos] = feat.darkCode
             }
 
-            val applySoftAa = feat.bh >= 5 && feat.bw >= 5
             for (rr in max(0, feat.r0 - 1)..min(h - 1, feat.r1 + 1)) {
                 for (cc in max(0, feat.c0 - 1)..min(w - 1, feat.c1 + 1)) {
                     val pos = rr * w + cc
@@ -497,23 +492,23 @@ object NativeBeadConverter {
                         if (nr in 0 until h && nc in 0 until w && (nr * w + nc) in coreSet) coreOrtho++
                     }
                     val isCorner = (rr == feat.r0 || rr == feat.r1) && (cc == feat.c0 || cc == feat.c1)
-                    if (applySoftAa && (coreOrtho >= 2 || (isCorner && pos in feat.comp && coreOrtho >= 1))) {
+                    if (coreOrtho >= 2 || (isCorner && pos in feat.comp && coreOrtho >= 1)) {
                         val aaCode = pickNearestCode(
-                            (0.26 * darkEntry.r + 0.74 * feat.avgBgR).roundToInt(),
-                            (0.26 * darkEntry.g + 0.74 * feat.avgBgG).roundToInt(),
-                            (0.26 * darkEntry.b + 0.74 * feat.avgBgB).roundToInt(),
+                            (0.32 * darkEntry.r + 0.68 * feat.avgBgR).roundToInt(),
+                            (0.32 * darkEntry.g + 0.68 * feat.avgBgG).roundToInt(),
+                            (0.32 * darkEntry.b + 0.68 * feat.avgBgB).roundToInt(),
                             subPal,
                             usedCodes
                         )
                         gridCodes[pos] = aaCode
                         usedCodes.add(aaCode)
-                    } else if (pos in feat.comp) {
+                    } else if (pos in feat.comp && lumGrid[pos] < 95.0) {
                         gridCodes[pos] = feat.domBgCode
                     }
                 }
             }
 
-            if (cid in confirmedEyes && (preservedBright.isNotEmpty() || (feat.bh >= 4 && feat.bw >= 4 && coreSet.size >= 10))) {
+            if (cid in confirmedEyes && (preservedBright.isNotEmpty() || coreSet.size >= 10)) {
                 if (preservedBright.isNotEmpty()) {
                     for (bp in preservedBright) gridCodes[bp] = "H1"
                 } else {
@@ -587,19 +582,14 @@ object NativeBeadConverter {
             for (cc in c0..c1) {
                 val pos = rr * w + cc
                 if (!mask[pos]) continue
-                if (targetH == 3 && targetW == 3) {
-                    if ((rr == r0 || rr == r1) && (cc == c0 || cc == c1)) continue
-                    coreSet.add(pos)
-                } else {
-                    val d2 = ((rr - cy) / ry).pow(2) + ((cc - cx) / rx).pow(2)
-                    if (d2 <= 0.90) coreSet.add(pos)
-                }
+                val d2 = ((rr - cy) / ry).pow(2) + ((cc - cx) / rx).pow(2)
+                if (d2 <= 0.96) coreSet.add(pos)
             }
         }
         for (pos in coreSet) gridCodes[pos] = darkCode
 
         val darkEntry = paletteRepo.findByMardCode(darkCode)
-        if (targetH >= 5 && targetW >= 5 && darkEntry != null) {
+        if (targetH >= 4 && targetW >= 4 && darkEntry != null) {
             for (rr in max(0, r0 - 1)..min(h - 1, r1 + 1)) {
                 for (cc in max(0, c0 - 1)..min(w - 1, c1 + 1)) {
                     val pos = rr * w + cc
@@ -733,13 +723,17 @@ object NativeBeadConverter {
                 val darkFrac = darkCnt.toDouble() / max(1, cnt)
                 val darkRgb = linearAvgToRgb(darkR, darkG, darkB, darkCnt)
                 val darkLum = 0.299 * Color.red(darkRgb) + 0.587 * Color.green(darkRgb) + 0.114 * Color.blue(darkRgb)
-                val highContrastTinyPupil = minLum < 72.0 && darkFrac >= 0.14 && (avgLum - darkLum) >= 56.0
-                if ((darkFrac >= 0.14 && (avgLum - darkLum) >= 48.0) || highContrastTinyPupil) {
-                    if (darkFrac >= 0.22 || highContrastTinyPupil) return darkRgb
+                if (darkFrac >= 0.18 && (avgLum - darkLum) >= 48.0) {
+                    // 仅当深瞳像素在格子中占比足够高 (>=0.38) 才完全锁定纯黑瞳孔；
+                    // 占比 0.18~0.37 的眼周轮廓格保留柔和混色过渡，避免膨大后变成突兀十字形状
+                    if (darkFrac >= 0.38 || (minLum < 68.0 && darkFrac >= 0.28 && (avgLum - darkLum) >= 58.0)) {
+                        return darkRgb
+                    }
+                    val darkWeight = (0.45 + 0.45 * ((darkFrac - 0.18) / 0.20)).coerceIn(0.45, 0.90)
                     return Color.rgb(
-                        (Color.red(darkRgb) * 0.80 + Color.red(avgRgb) * 0.20).roundToInt(),
-                        (Color.green(darkRgb) * 0.80 + Color.green(avgRgb) * 0.20).roundToInt(),
-                        (Color.blue(darkRgb) * 0.80 + Color.blue(avgRgb) * 0.20).roundToInt()
+                        (Color.red(darkRgb) * darkWeight + Color.red(avgRgb) * (1.0 - darkWeight)).roundToInt(),
+                        (Color.green(darkRgb) * darkWeight + Color.green(avgRgb) * (1.0 - darkWeight)).roundToInt(),
+                        (Color.blue(darkRgb) * darkWeight + Color.blue(avgRgb) * (1.0 - darkWeight)).roundToInt()
                     )
                 }
             }

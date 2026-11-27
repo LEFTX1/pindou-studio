@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -125,7 +126,7 @@ fun PindouStudioScreen(viewModel: PindouViewModel) {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = CraftSurface),
                 title = {
-                    Column {
+                    Column(modifier = Modifier.clickable { viewModel.openAboutUpdateDialog() }) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                             Image(
                                 painter = painterResource(R.drawable.ic_brand_logo),
@@ -158,12 +159,37 @@ fun PindouStudioScreen(viewModel: PindouViewModel) {
                     }
                 },
                 actions = {
-                    TextButton(onClick = { showSamplesDialog = true }) {
-                        Text("作品库", fontWeight = FontWeight.SemiBold)
+                    TextButton(
+                        onClick = viewModel::openAboutUpdateDialog,
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Text("更新", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                            if (state.hasAvailableUpdate) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .clip(CircleShape)
+                                        .background(TerracottaAccent)
+                                )
+                            }
+                        }
+                    }
+                    TextButton(
+                        onClick = { showSamplesDialog = true },
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                    ) {
+                        Text("作品库", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                     }
                     Box {
-                        TextButton(onClick = { showExportMenu = true }) {
-                            Text("导出", fontWeight = FontWeight.Bold, color = TerracottaAccent)
+                        TextButton(
+                            onClick = { showExportMenu = true },
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                        ) {
+                            Text("导出", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TerracottaAccent)
                         }
                         DropdownMenu(expanded = showExportMenu, onDismissRequest = { showExportMenu = false }) {
                             DropdownMenuItem(
@@ -317,15 +343,156 @@ fun PindouStudioScreen(viewModel: PindouViewModel) {
         )
     }
 
+    if (state.showAboutUpdateDialog) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissAboutUpdateDialog,
+            containerColor = CraftSurface,
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_brand_logo),
+                        contentDescription = "豆绘工坊 Logo",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(RoundedCornerShape(9.dp))
+                            .border(1.dp, HairlineBorder, RoundedCornerShape(9.dp))
+                    )
+                    Column {
+                        Text("豆绘工坊 v${state.appVersionName}", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = InkCharcoal)
+                        Text("免费开源 · 纯离线 · 零广告（Build ${state.appVersionCode}）", fontSize = 11.sp, color = InkMuted)
+                    }
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = ParchmentBg),
+                        border = BorderStroke(1.dp, HairlineBorder)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text("GitHub 开源仓库地址", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = InkCharcoal)
+                            Text(
+                                com.pindoustudio.app.update.AppUpdater.GITHUB_REPO_URL,
+                                fontSize = 11.5.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = TerracottaAccent,
+                                modifier = Modifier.clickable { viewModel.openGitHubRepo() }
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = viewModel::copyGitHubRepoUrl,
+                                    modifier = Modifier.weight(1f),
+                                    contentPadding = PaddingValues(vertical = 6.dp)
+                                ) { Text("复制地址", fontSize = 12.sp) }
+                                OutlinedButton(
+                                    onClick = viewModel::openGitHubRepo,
+                                    modifier = Modifier.weight(1f),
+                                    border = BorderStroke(1.dp, TerracottaAccent),
+                                    contentPadding = PaddingValues(vertical = 6.dp)
+                                ) { Text("打开 GitHub", fontSize = 12.sp, color = TerracottaAccent) }
+                            }
+                        }
+                    }
+
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = ParchmentBg),
+                        border = BorderStroke(1.dp, if (state.hasAvailableUpdate) TerracottaAccent else HairlineBorder)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text("云端版本检测（跨版本合并直达）", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = InkCharcoal)
+                            Text(
+                                "即使隔了多个版本才打开，点击检查更新也会一次性拉取最新版直装并保留全部本地作品。",
+                                fontSize = 11.5.sp,
+                                color = InkMuted
+                            )
+                            val statusText = state.updateCheckStatusText
+                            if (!statusText.isNullOrBlank()) {
+                                Text(
+                                    statusText,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (state.hasAvailableUpdate) TerracottaAccent else SageCompletion
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissAboutUpdateDialog) { Text("关闭", color = InkMuted) }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.checkForUpdate(manual = true) },
+                    enabled = !state.isCheckingUpdate,
+                    colors = ButtonDefaults.buttonColors(containerColor = TerracottaAccent)
+                ) {
+                    if (state.isCheckingUpdate) {
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = CraftSurface)
+                        Spacer(Modifier.width(6.dp))
+                        Text("正在检测…")
+                    } else {
+                        Text(if (state.hasAvailableUpdate) "立即更新到最新版" else "检查更新", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        )
+    }
+
     val updManifest = state.updateManifest
     if (state.showUpdateDialog && updManifest != null) {
+        val mergedSummary = remember(updManifest, state.appVersionCode) {
+            updManifest.buildMergedSummary(state.appVersionCode)
+        }
         AlertDialog(
             onDismissRequest = viewModel::dismissUpdateDialog,
             containerColor = CraftSurface,
             title = { Text("发现新版本 v${updManifest.versionName}", fontWeight = FontWeight.Bold, color = InkCharcoal) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(updManifest.changelog, fontSize = 13.sp, color = InkCharcoal)
+                    if (mergedSummary.skippedCount > 1) {
+                        Surface(
+                            color = TerracottaSoft,
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, TerracottaAccent.copy(alpha = 0.45f))
+                        ) {
+                            Text(
+                                "已为您合并跳过期间的 ${mergedSummary.skippedCount} 个版本，一次更新直达 v${updManifest.versionName}（保留作品数据）",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TerracottaAccent,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 220.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        Text(mergedSummary.mergedChangelog, fontSize = 13.sp, color = InkCharcoal)
+                    }
+                    Text(
+                        "开源主页：${updManifest.repoUrl}",
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = InkMuted,
+                        modifier = Modifier.clickable { viewModel.openGitHubRepo() }
+                    )
                     val prog = state.updateProgress
                     if (prog != null) {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
