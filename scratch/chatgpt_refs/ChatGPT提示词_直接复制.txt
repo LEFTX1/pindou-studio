@@ -1,0 +1,28 @@
+========================================================================
+在已打开的 ChatGPT Plus (https://chatgpt.com/) 中直接生成真实「烘烤定型」拼豆成品实拍图
+========================================================================
+
+【使用方式】（可并发开 2~3 个 ChatGPT 标签页同时跑）
+1. 每个新聊天窗口，拖入【2 张图片】：
+   - 第 1 张：下方对应款式的 *_grid_ref.png（严格像素图纸）
+   - 第 2 张：real_flat_melt_ref.png（真实世界满焊热熨拼豆质感参考图）
+2. 粘贴下方对应的英文提示词并发送即可！
+3. 生成后下载保存到本机，或直接拖进/发给 Antigravity 对话中即可自动整合替换到汇总目录。
+
+------------------------------------------------------------------------
+【A 类 · 矩形满铺板块】（以下 6 张均使用 A 类提示词；图四请注意保留白色“干嘛......”字样及竖向椭圆瞳孔）
+- cat1_fusion_refined_grid_ref.png   (图一 · 方案1 融合精修版 88×87)
+- cat2_fusion_refined_grid_ref.png   (图二 · 方案1 融合精修版 72×72)
+- cat2_ai_refined_grid_ref.png       (图二 · 方案2 AI重绘精修版 72×72)
+- cat3_fusion_refined_grid_ref.png   (图三 · 方案1 融合精修版 94×75)
+- cat4_fusion_refined_grid_ref.png   (图四 · 方案1 融合精修版 92×78)
+- cat4_ai_refined_grid_ref.png       (图四 · 方案2 AI重绘精修版 96×81)
+------------------------------------------------------------------------
+Create a photorealistic top-down macro photograph of this finished, ironed flat-melt Perler fuse bead rectangular panel (3mm thick plastic) resting on a clean matte warm-beige tabletop. Strictly copy EVERY pixel color, exact proportion, eye pupil geometry, white eye catchlights, overlaid white pixel text (if present), and cat details from Image 1 without adding or altering any features. Match the exact melted plastic surface texture of Image 2: tight interlocking rounded-square ('squircle') fused plastic pixel tiles with shallow grid melt seams, parchment-paper semi-matte satin sheen, and ~80% center holes melted shut with only rare tiny pin-prick dimples (NO hollow O-rings or open bead tunnels). Pure isolated finished piece with subtle upper-left natural window shadow only—NO pegboard, NO tools, NO hands, NO extra beads.
+
+------------------------------------------------------------------------
+【B 类 · 异形轮廓贴片（外沿不填米白背景豆）】（以下 2 张使用 B 类提示词）
+- cat1_ai_refined_grid_ref.png       (图一 · 方案2 AI重绘精修版 91×92)
+- cat3_ai_refined_grid_ref.png       (图三 · 方案2 AI重绘精修版 96×72)
+------------------------------------------------------------------------
+Create a photorealistic top-down macro photograph of this finished, die-cut contoured ironed flat-melt Perler fuse bead craft sprite (3mm thick plastic) resting on a clean matte warm-beige tabletop. Strictly copy ONLY the cat-and-box / cat-and-blue-sheet colored sprite silhouette, exact pixel colors, round eyes, and white eye catchlights from Image 1—leave the surrounding cream background completely blank matte tabletop (do NOT add background beads), with softly scalloped rounded outer bead edges. Match the exact melted plastic surface texture of Image 2: tight interlocking rounded-square ('squircle') fused plastic pixel tiles with shallow melt seams, parchment-ironed satin sheen, and ~80% center holes melted shut with only tiny random pin-prick dimples (NO open hollow O-rings). Subtle natural window shadow only—NO pegboard, NO tools, NO hands, NO extra beads, NO text.

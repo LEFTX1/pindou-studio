@@ -1,0 +1,14 @@
+{
+  "versionCode": 3,
+  "versionName": "1.2.0",
+  "forceUpdate": false,
+  "sha256": "2f5c0762723b19c369856b8baa2483e8d57ca0b57da4d28f2cfc533016fb9222",
+  "sizeBytes": 4029099,
+  "changelog": "1. 支持作品馆历史作品与当前画布随时重命名，排行与统计实时更新；2. 新增历史外部图纸/实拍成品照离线智能识别；3. 优化内置示例与相册导入默认命名；4. 内置国内多镜像免梯云端检测更新。",
+  "apkMirrors": [
+    "https://ghfast.top/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.0/pindou-studio-v1.2.0-release.apk",
+    "https://gh-proxy.com/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.0/pindou-studio-v1.2.0-release.apk",
+    "https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.0/pindou-studio-v1.2.0-release.apk"
+  ],
+  "fallbackPageUrl": "https://github.com/LEFTX1/pindou-studio/releases"
+}

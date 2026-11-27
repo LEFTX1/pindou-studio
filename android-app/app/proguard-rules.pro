@@ -1,0 +1,2 @@
+-keep class com.pindoustudio.app.** { *; }
+-dontwarn com.pindoustudio.app.**

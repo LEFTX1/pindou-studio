@@ -1,0 +1,23 @@
+# Signing secrets (NEVER commit)
+android-app/keystore/
+android-app/keystore.properties
+android-app/local.properties
+*.jks
+*.keystore
+
+# Android & Gradle build outputs
+android-app/.gradle/
+android-app/build/
+android-app/app/build/
+android-app/.idea/
+outputs/
+*.apk
+
+# Python & JS caches
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+.DS_Store
+Thumbs.db

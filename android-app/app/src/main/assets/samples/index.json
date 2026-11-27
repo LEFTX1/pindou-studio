@@ -1,0 +1,26 @@
+[
+  {
+    "id": "chubby_40x38",
+    "title": "胖圆脸猫 · 异形描边",
+    "subtitle": "40×38 · 1141颗 · 13色",
+    "file": "samples/chubby_40x38.pindou.json"
+  },
+  {
+    "id": "round_40x43",
+    "title": "圆脸小橘猫 · 像素镂空",
+    "subtitle": "40×43 · 1332颗 · 13色",
+    "file": "samples/round_40x43.pindou.json"
+  },
+  {
+    "id": "box_40x40",
+    "title": "纸箱白猫 · 异形镂空",
+    "subtitle": "40×40 · 948颗 · 15色",
+    "file": "samples/box_40x40.pindou.json"
+  },
+  {
+    "id": "face_48x48",
+    "title": "大头橘猫 · 精致像素版",
+    "subtitle": "48×48 · 2304颗 · 14色",
+    "file": "samples/face_48x48.pindou.json"
+  }
+]

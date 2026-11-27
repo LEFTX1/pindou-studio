@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>豆绘工坊 · 国内 2.6mm 拼豆 Studio</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- 顶部控制栏 -->
+    <header class="topbar">
+      <div class="brand-cluster">
+        <div class="brand-logo" aria-hidden="true">
+          <span class="bead-dot d1"></span>
+          <span class="bead-dot d2"></span>
+          <span class="bead-dot d3"></span>
+          <span class="bead-dot d4"></span>
+        </div>
+        <div class="brand-text">
+          <div class="brand-title-row">
+            <h1>豆绘工坊</h1>
+            <span class="std-pill">2.6mm 融合豆 · MARD 221</span>
+          </div>
+          <p class="brand-sub" id="projectNameDisplay">正在加载内置猫咪作品库…</p>
+        </div>
+      </div>
+
+      <div class="topbar-controls">
+        <label class="control-group" for="gallerySelect">
+          <span class="ctl-label">内置作品库</span>
+          <select id="gallerySelect" class="select-input"></select>
+        </label>
+
+        <div class="control-group">
+          <span class="ctl-label">品牌色号</span>
+          <div class="segmented" id="brandSwitcher" role="group" aria-label="选择拼豆品牌">
+            <button type="button" class="seg-btn active" data-brand="MARD">MARD</button>
+            <button type="button" class="seg-btn" data-brand="COCO">COCO</button>
+            <button type="button" class="seg-btn" data-brand="漫漫">漫漫</button>
+            <button type="button" class="seg-btn" data-brand="盼盼">盼盼</button>
+            <button type="button" class="seg-btn" data-brand="咪小窝">咪小窝</button>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <span class="ctl-label">豆径规格</span>
+          <div class="segmented" id="beadSpecSwitcher" role="group" aria-label="选择豆子直径">
+            <button type="button" class="seg-btn active" data-mm="2.6">2.6mm</button>
+            <button type="button" class="seg-btn" data-mm="5.0">5mm</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="export-actions">
+        <button type="button" class="btn btn-secondary" id="btnExportSheet" title="导出带当前品牌色号的施工图 PNG">施工图 PNG</button>
+        <button type="button" class="btn btn-secondary" id="btnExportBaked" title="导出 2.6mm 热熨平融效果图 JPG">熨烫图 JPG</button>
+        <button type="button" class="btn btn-secondary" id="btnExportCsv" title="导出五品牌对照与+10%备豆 CSV">清单 CSV</button>
+        <button type="button" class="btn btn-primary" id="btnExportPindou" title="保存为可继续编辑的 .pindou.json 工程">.pindou.json</button>
+      </div>
+    </header>
+
+    <!-- 三栏桌面工坊主体 -->
+    <main class="workbench">
+      <!-- 左栏：图像转换与规格设置 -->
+      <aside class="panel panel-left">
+        <div class="panel-header">
+          <h2>图片转拼豆图纸</h2>
+          <span class="hint-tag">统一标准内核</span>
+        </div>
+
+        <div class="panel-scroll">
+          <div class="upload-box" id="uploadDropzone" tabindex="0" role="button" aria-label="上传照片或参考图">
+            <input type="file" id="imageFileInput" accept="image/*" hidden />
+            <img id="uploadPreviewImg" class="upload-preview hidden" alt="待转换原图预览" />
+            <div class="upload-placeholder" id="uploadPlaceholder">
+              <div class="upload-icon">+</div>
+              <div class="upload-title">点击或拖拽图片到此处</div>
+              <div class="upload-desc">支持猫咪照片、像素参考图、PNG 透明图</div>
+            </div>
+          </div>
+
+          <section class="form-section">
+            <span class="section-label">转换算法模式</span>
+            <div class="mode-cards" id="convertModeGroup">
+              <button type="button" class="mode-card active" data-mode="photo_fusion">
+                <strong>照片融合精修</strong>
+                <span>边缘显著性加权 + ICM 平滑</span>
+              </button>
+              <button type="button" class="mode-card" data-mode="cutout_outline">
+                <strong>异形描边镂空</strong>
+                <span>自动抠底 + 炭灰外描边</span>
+              </button>
+              <button type="button" class="mode-card" data-mode="grid_extract">
+                <strong>网格图直提</strong>
+                <span>采样参考图每格真实色块</span>
+              </button>
+            </div>
+          </section>
+
+          <section class="form-section">
+            <span class="section-label">国内拼板尺寸预设</span>
+            <div class="preset-chips" id="boardPresetChips"></div>
+            <div class="dim-inputs">
+              <label class="num-field">
+                <span>宽 (列)</span>
+                <input type="number" id="inputWidth" min="12" max="128" value="40" />
+              </label>
+              <span class="dim-times">×</span>
+              <label class="num-field">
+                <span>高 (行)</span>
+                <input type="number" id="inputHeight" min="12" max="128" value="40" />
+              </label>
+            </div>
+          </section>
+
+          <section class="form-section">
+            <div class="slider-head">
+              <span class="section-label">最大用色数上限</span>
+              <span class="mono-val" id="maxColorsLabel">16 色</span>
+            </div>
+            <input type="range" id="inputMaxColors" min="6" max="32" value="16" class="range-slider" />
+          </section>
+
+          <section class="form-section check-list">
+            <label class="check-item">
+              <input type="checkbox" id="chkSuppressGreen" checked />
+              <span>抑制白毛偏绿（排除 G15/H18/H21/M1-7）</span>
+            </label>
+            <label class="check-item">
+              <input type="checkbox" id="chkSmoothEyes" checked />
+              <span>圆眼柔和抗锯齿（告别棱角）</span>
+            </label>
+            <label class="check-item">
+              <input type="checkbox" id="chkRemoveBg" />
+              <span>自动抠除四周纯色背景</span>
+            </label>
+            <label class="check-item">
+              <input type="checkbox" id="chkOutline" />
+              <span>外圈加 1 格 H5 炭灰描边</span>
+            </label>
+          </section>
+
+          <button type="button" class="btn btn-primary btn-block" id="btnConvert">
+            生成拼豆图纸
+          </button>
+
+          <div class="secondary-actions">
+            <input type="file" id="pindouImportInput" accept=".json,.pindou.json" hidden />
+            <button type="button" class="btn btn-ghost" id="btnImportPindou">导入 .pindou.json</button>
+            <button type="button" class="btn btn-ghost" id="btnNewBlank">新建空白板</button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- 中央：High-DPI 交互画布与手拼工作台 -->
+      <section class="canvas-stage">
+        <div class="stage-toolbar">
+          <div class="view-tabs" id="viewModeTabs">
+            <button type="button" class="view-tab active" data-view="grid">网格色号图</button>
+            <button type="button" class="view-tab" data-view="baked">成品效果预览</button>
+          </div>
+
+          <div class="tool-buttons" id="drawToolGroup">
+            <button type="button" class="tool-btn active" data-tool="brush" title="画笔 (B)">画笔</button>
+            <button type="button" class="tool-btn" data-tool="eraser" title="橡皮擦 (E)">橡皮</button>
+            <button type="button" class="tool-btn" data-tool="eyedropper" title="吸管取色 (I)">吸管</button>
+            <button type="button" class="tool-btn" data-tool="fill" title="同色油漆桶 (G)">填充</button>
+            <span class="tool-sep"></span>
+            <button type="button" class="tool-btn" id="btnUndo" title="撤销 (Ctrl+Z)" disabled>撤销</button>
+            <button type="button" class="tool-btn" id="btnRedo" title="重做 (Ctrl+Y)" disabled>重做</button>
+          </div>
+
+          <div class="view-options">
+            <label class="mini-toggle"><input type="checkbox" id="chkShowCodes" checked /><span>色号</span></label>
+            <label class="mini-toggle"><input type="checkbox" id="chkShowGrid" checked /><span>网格</span></label>
+            <div class="zoom-box">
+              <button type="button" class="icon-btn" id="btnZoomOut" title="缩小">−</button>
+              <span class="zoom-label" id="zoomPercent">100%</span>
+              <button type="button" class="icon-btn" id="btnZoomIn" title="放大">+</button>
+              <button type="button" class="btn btn-ghost btn-xs" id="btnFitView">适配</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="canvas-tray" id="canvasTray">
+          <canvas id="beadCanvas"></canvas>
+          <div class="hover-tooltip hidden" id="hoverTooltip"></div>
+        </div>
+
+        <div class="stage-statusbar">
+          <div class="status-item" id="statusCoords">坐标：移入网格查看行列与 5 品牌色号</div>
+          <div class="status-item status-brush" id="statusBrush">当前画笔：H1 纯白</div>
+          <div class="status-item" id="statusZoomTip">提示：滚轮缩放 · 空格+拖拽平移 · 点击右侧色号可单独高亮</div>
+        </div>
+      </section>
+
+      <!-- 右栏：用豆统计、色卡选色与单色高亮 -->
+      <aside class="panel panel-right">
+        <div class="panel-header">
+          <h2>用豆清点与对照</h2>
+          <span class="hint-tag" id="bomBrandBadge">MARD</span>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <span class="kpi-label">网格规格</span>
+            <strong class="kpi-val" id="kpiGridSize">—</strong>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">实拼 / 备豆</span>
+            <strong class="kpi-val" id="kpiBeadCount">—</strong>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">成品尺寸</span>
+            <strong class="kpi-val" id="kpiPhysicalCm">—</strong>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label" id="kpiBoardLabel">52×52 大板</span>
+            <strong class="kpi-val" id="kpiBoardCount">—</strong>
+          </div>
+        </div>
+
+        <!-- 当前画笔卡片 + 打开221全色卡 -->
+        <div class="active-brush-card">
+          <div class="brush-swatch" id="activeBrushSwatch"></div>
+          <div class="brush-info">
+            <div class="brush-code-row">
+              <strong id="activeBrushCode">H1</strong>
+              <span id="activeBrushMard"></span>
+            </div>
+            <div class="brush-name" id="activeBrushName">纯白 · MARD H1</div>
+          </div>
+          <button type="button" class="btn btn-secondary btn-xs" id="btnOpenPalette">选色 (221色)</button>
+        </div>
+
+        <div class="bom-toolbar">
+          <span class="section-label" id="bomCountTitle">当前用色清单 (0 色)</span>
+          <button type="button" class="btn btn-ghost btn-xs hidden" id="btnClearHighlight">取消单独高亮</button>
+        </div>
+
+        <div class="bom-list" id="bomList"></div>
+
+        <div class="panel-footer">
+          <button type="button" class="btn btn-secondary btn-block" id="btnCopyBom">复制采购清单文本（含 5 品牌）</button>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <!-- MARD 221 全色卡检索弹窗 -->
+  <div class="modal-backdrop hidden" id="paletteModal">
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="paletteModalTitle">
+      <div class="modal-head">
+        <div>
+          <h3 id="paletteModalTitle">MARD 221 基准全色卡 · 五大品牌实时对照</h3>
+          <p>支持输入 MARD / COCO / 漫漫 / 盼盼 / 咪小窝 色号或中文色名检索</p>
+        </div>
+        <button type="button" class="icon-btn" id="btnClosePalette" aria-label="关闭色卡">×</button>
+      </div>
+      <div class="palette-filters">
+        <input type="search" id="paletteSearchInput" class="search-input" placeholder="搜索色号（如 H1 / E02 / 炭灰 / 肤色）…" />
+        <div class="series-tabs" id="paletteSeriesTabs">
+          <button type="button" class="series-btn active" data-series="ALL">全部</button>
+          <button type="button" class="series-btn" data-series="A">A 黄橙</button>
+          <button type="button" class="series-btn" data-series="B">B 绿</button>
+          <button type="button" class="series-btn" data-series="C">C 蓝</button>
+          <button type="button" class="series-btn" data-series="D">D 紫</button>
+          <button type="button" class="series-btn" data-series="E">E 粉红</button>
+          <button type="button" class="series-btn" data-series="F">F 红</button>
+          <button type="button" class="series-btn" data-series="G">G 棕肤</button>
+          <button type="button" class="series-btn" data-series="H">H 黑白灰</button>
+          <button type="button" class="series-btn" data-series="M">M 莫兰迪</button>
+        </div>
+      </div>
+      <div class="palette-grid" id="paletteGrid"></div>
+    </div>
+  </div>
+
+  <!-- 轻提示 Toast -->
+  <div class="toast hidden" id="toastEl"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
