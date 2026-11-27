@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.Uri
 import com.pindoustudio.app.data.PaletteRepository
 import com.pindoustudio.app.model.BeadPattern
@@ -70,14 +72,47 @@ object ExternalBeadRecognizer {
         } ?: return null
 
         val curMax = max(decoded.width, decoded.height)
-        if (curMax <= maxSide) return decoded
+        val bounded = if (curMax <= maxSide) {
+            decoded
+        } else {
+            val scale = maxSide.toFloat() / curMax.toFloat()
+            val dstW = max(1, (decoded.width * scale).roundToInt())
+            val dstH = max(1, (decoded.height * scale).roundToInt())
+            val scaled = Bitmap.createScaledBitmap(decoded, dstW, dstH, true)
+            if (scaled != decoded) decoded.recycle()
+            scaled
+        }
 
-        val scale = maxSide.toFloat() / curMax.toFloat()
-        val dstW = max(1, (decoded.width * scale).roundToInt())
-        val dstH = max(1, (decoded.height * scale).roundToInt())
-        val scaled = Bitmap.createScaledBitmap(decoded, dstW, dstH, true)
-        if (scaled != decoded) decoded.recycle()
-        return scaled
+        val orientation = runCatching {
+            context.contentResolver.openInputStream(uri)?.use {
+                ExifInterface(it).getAttributeInt(
+                    ExifInterface.TAG_ORIENTATION,
+                    ExifInterface.ORIENTATION_NORMAL
+                )
+            } ?: ExifInterface.ORIENTATION_NORMAL
+        }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+
+        val matrix = Matrix()
+        when (orientation) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+            ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+            ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.preScale(-1f, 1f)
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.preScale(1f, -1f)
+            ExifInterface.ORIENTATION_TRANSPOSE -> {
+                matrix.postRotate(90f)
+                matrix.preScale(-1f, 1f)
+            }
+            ExifInterface.ORIENTATION_TRANSVERSE -> {
+                matrix.postRotate(270f)
+                matrix.preScale(-1f, 1f)
+            }
+            else -> return bounded
+        }
+
+        val rotated = Bitmap.createBitmap(bounded, 0, 0, bounded.width, bounded.height, matrix, true)
+        if (rotated != bounded) bounded.recycle()
+        return rotated
     }
 
     fun recognize(

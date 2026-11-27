@@ -1,14 +1,14 @@
 {
-  "versionCode": 5,
-  "versionName": "1.2.2",
+  "versionCode": 6,
+  "versionName": "1.2.3",
   "forceUpdate": false,
-  "sha256": "3fefa2bccfc8e480837f0875139a733c727e34fabc94197f082cf3b838837b41",
-  "sizeBytes": 4362205,
-  "changelog": "1. 修复异形描边镂空模式下实拍宠物照片（如猫咪阴影脖颈）被误切割的问题，升级离线测地线抠图与多轴凹陷桥接算法；2. 全场景图片导入（图转豆 / 历史图纸识别 / 作品馆相册槽位）默认直达系统原生相册，告别文件管理器。",
+  "sha256": "9fe4783cda2b69131e88747ed88ed00fd25f8763c0a949c43758903ced2797f4",
+  "sizeBytes": 4378589,
+  "changelog": "1. 图片导入全面支持交互式放大与自由框选区域：支持双指缩放、1×~4× 快捷倍率、90° 旋转、自由/1:1/3:4/4:3 比例裁剪及拖拽微调构图；2. 覆盖「图片转图」（选图后自动弹出框选，预览图随时重调）与「历史图纸 / 成品照智能识别」（放大框选目标局部后重跑识别）两大入口；3. 新增 EXIF 拍照方向自动矫正，竖拍/横拍照片导入不倒置。",
   "apkMirrors": [
-    "https://ghfast.top/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.2/pindou-studio-v1.2.2-release.apk",
-    "https://gh-proxy.com/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.2/pindou-studio-v1.2.2-release.apk",
-    "https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.2/pindou-studio-v1.2.2-release.apk"
+    "https://ghfast.top/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.3/pindou-studio-v1.2.3-release.apk",
+    "https://gh-proxy.com/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.3/pindou-studio-v1.2.3-release.apk",
+    "https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.3/pindou-studio-v1.2.3-release.apk"
   ],
   "fallbackPageUrl": "https://github.com/LEFTX1/pindou-studio/releases"
 }

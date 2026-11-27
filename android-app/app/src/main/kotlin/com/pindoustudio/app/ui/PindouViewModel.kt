@@ -60,7 +60,10 @@ data class PindouUiState(
     val canRedo: Boolean = false,
     val lastTappedCoord: String = "轻点网格涂色 · 双指缩放拖拽",
     val isConverting: Boolean = false,
+    val convertOriginalBmp: Bitmap? = null,
     val convertPreviewBmp: Bitmap? = null,
+    val isConvertCropped: Boolean = false,
+    val showConvertCropDialog: Boolean = false,
     val convertSourceName: String = "内置猫咪示例照片",
     val convertWorkTitle: String = "",
     val convertMode: ConvertMode = ConvertMode.CUTOUT_OUTLINE,
@@ -81,7 +84,10 @@ data class PindouUiState(
     val portfolioWorks: List<PortfolioWork> = emptyList(),
     val portfolioStats: PortfolioStats,
     val showExternalImportDialog: Boolean = false,
+    val externalImportOriginalBmp: Bitmap? = null,
     val externalImportSourceBmp: Bitmap? = null,
+    val isExternalCropped: Boolean = false,
+    val showExternalCropDialog: Boolean = false,
     val externalImportTitle: String = "",
     val externalImportHint: ExternalImportHint = ExternalImportHint.AUTO,
     val externalImportCustomW: Int? = null,
@@ -127,6 +133,7 @@ class PindouViewModel(application: Application) : AndroidViewModel(application) 
                 pattern = firstPattern,
                 bom = initialBom,
                 samples = samples,
+                convertOriginalBmp = demoPhoto,
                 convertPreviewBmp = demoPhoto,
                 appVersionName = ver.versionName,
                 appVersionCode = ver.versionCode,
@@ -362,14 +369,60 @@ class PindouViewModel(application: Application) : AndroidViewModel(application) 
     fun setConvertSourceUri(uri: Uri) {
         viewModelScope.launch {
             val ctx = getApplication<Application>()
-            val bmp = withContext(Dispatchers.IO) {
-                ExternalBeadRecognizer.decodeBoundedBitmap(ctx, uri, maxSide = 2048)
+            val (bmp, name) = withContext(Dispatchers.IO) {
+                val decoded = ExternalBeadRecognizer.decodeBoundedBitmap(ctx, uri, maxSide = 2048)
+                val cleanName = resolveCleanTitleFromUri(ctx, uri).ifBlank { "相册图片" }
+                decoded to cleanName
             }
             if (bmp != null) {
-                _uiState.update { it.copy(convertPreviewBmp = bmp, convertSourceName = "相册图片") }
+                _uiState.update {
+                    it.copy(
+                        convertOriginalBmp = bmp,
+                        convertPreviewBmp = bmp,
+                        isConvertCropped = false,
+                        showConvertCropDialog = true,
+                        convertSourceName = name
+                    )
+                }
             } else {
                 showToast("读取相册图片失败")
             }
+        }
+    }
+
+    fun openConvertCropDialog() {
+        val st = _uiState.value
+        if (st.convertOriginalBmp == null && st.convertPreviewBmp == null) {
+            showToast("请先选择一张图片")
+            return
+        }
+        _uiState.update { it.copy(showConvertCropDialog = true) }
+    }
+
+    fun dismissConvertCropDialog() {
+        _uiState.update { it.copy(showConvertCropDialog = false) }
+    }
+
+    fun applyConvertCrop(cropped: Bitmap) {
+        _uiState.update {
+            it.copy(
+                convertPreviewBmp = cropped,
+                isConvertCropped = true,
+                showConvertCropDialog = false,
+                toastMessage = "已框选区域（${cropped.width}×${cropped.height} px）"
+            )
+        }
+    }
+
+    fun resetConvertCropToOriginal() {
+        _uiState.update { st ->
+            val orig = st.convertOriginalBmp ?: st.convertPreviewBmp
+            st.copy(
+                convertPreviewBmp = orig,
+                isConvertCropped = false,
+                showConvertCropDialog = false,
+                toastMessage = "已恢复原图范围"
+            )
         }
     }
 
@@ -732,7 +785,10 @@ class PindouViewModel(application: Application) : AndroidViewModel(application) 
             }
             _uiState.update {
                 it.copy(
+                    externalImportOriginalBmp = bmp,
                     externalImportSourceBmp = bmp,
+                    isExternalCropped = false,
+                    showExternalCropDialog = false,
                     externalImportTitle = fileName,
                     externalImportCustomW = null,
                     externalImportCustomH = null,
@@ -743,6 +799,49 @@ class PindouViewModel(application: Application) : AndroidViewModel(application) 
             }
             runExternalRecognition()
         }
+    }
+
+    fun openExternalCropDialog() {
+        val st = _uiState.value
+        if (st.externalImportOriginalBmp == null && st.externalImportSourceBmp == null) {
+            showToast("请先从相册选图")
+            return
+        }
+        _uiState.update { it.copy(showExternalCropDialog = true) }
+    }
+
+    fun dismissExternalCropDialog() {
+        _uiState.update { it.copy(showExternalCropDialog = false) }
+    }
+
+    fun applyExternalCrop(cropped: Bitmap) {
+        _uiState.update {
+            it.copy(
+                externalImportSourceBmp = cropped,
+                isExternalCropped = true,
+                showExternalCropDialog = false,
+                externalImportCustomW = null,
+                externalImportCustomH = null,
+                isRecognizingExternal = true
+            )
+        }
+        runExternalRecognition()
+    }
+
+    fun resetExternalCropToOriginal() {
+        val st = _uiState.value
+        val orig = st.externalImportOriginalBmp ?: st.externalImportSourceBmp ?: return
+        _uiState.update {
+            it.copy(
+                externalImportSourceBmp = orig,
+                isExternalCropped = false,
+                showExternalCropDialog = false,
+                externalImportCustomW = null,
+                externalImportCustomH = null,
+                isRecognizingExternal = true
+            )
+        }
+        runExternalRecognition()
     }
 
     fun updateExternalImportOptions(

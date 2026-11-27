@@ -826,27 +826,80 @@ private fun PhotoConvertTab(
             ) {
                 val bmp = state.convertPreviewBmp
                 if (bmp != null) {
-                    Image(
-                        bitmap = bmp.asImageBitmap(),
-                        contentDescription = "待转换原图",
-                        contentScale = ContentScale.Fit,
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(160.dp)
+                            .height(172.dp)
                             .clip(RoundedCornerShape(10.dp))
                             .background(ParchmentBg)
-                    )
+                            .clickable { viewModel.openConvertCropDialog() }
+                    ) {
+                        Image(
+                            bitmap = bmp.asImageBitmap(),
+                            contentDescription = "待转换原图",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Surface(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(8.dp),
+                            shape = RoundedCornerShape(999.dp),
+                            color = InkCharcoal.copy(alpha = 0.78f)
+                        ) {
+                            Text(
+                                if (state.isConvertCropped) "已框选 ${bmp.width}×${bmp.height} · 调整" else "点击放大框选区域",
+                                color = Color.White,
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
                 }
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("当前图片：${state.convertSourceName}", fontSize = 12.sp, color = InkMuted)
-                    OutlinedButton(onClick = {
-                        photoPicker.launch(Unit)
-                    }) {
-                        Text("从相册换图")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "当前图片：${state.convertSourceName}",
+                            fontSize = 12.sp,
+                            color = InkMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (state.isConvertCropped) {
+                            TextButton(
+                                onClick = viewModel::resetConvertCropToOriginal,
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text("恢复原图", fontSize = 11.5.sp, color = TerracottaAccent)
+                            }
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { viewModel.openConvertCropDialog() },
+                            modifier = Modifier.weight(1f),
+                            border = BorderStroke(1.dp, TerracottaAccent)
+                        ) {
+                            Text("放大框选", color = TerracottaAccent, fontWeight = FontWeight.SemiBold)
+                        }
+                        OutlinedButton(
+                            onClick = { photoPicker.launch(Unit) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("从相册换图")
+                        }
                     }
                 }
                 OutlinedTextField(
@@ -950,6 +1003,17 @@ private fun PhotoConvertTab(
                 Text("开始离线生成拼豆图纸", fontWeight = FontWeight.Bold)
             }
         }
+    }
+
+    val cropSrc = state.convertOriginalBmp ?: state.convertPreviewBmp
+    if (state.showConvertCropDialog && cropSrc != null) {
+        ImageCropDialog(
+            sourceBitmap = cropSrc,
+            title = "放大框选目标区域",
+            onConfirmCrop = viewModel::applyConvertCrop,
+            onUseOriginal = viewModel::resetConvertCropToOriginal,
+            onDismiss = viewModel::dismissConvertCropDialog
+        )
     }
 }
 

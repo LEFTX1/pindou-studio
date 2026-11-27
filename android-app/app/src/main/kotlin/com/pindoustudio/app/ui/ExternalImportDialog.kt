@@ -126,17 +126,47 @@ fun ExternalImportDialog(
                     }
                 }
 
-                Button(
-                    onClick = {
-                        picker.launch(Unit)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = TerracottaAccent)
-                ) {
-                    Text(
-                        if (state.externalImportSourceBmp == null) "从相册选图纸 / 成品照" else "重新从相册换图",
-                        fontWeight = FontWeight.Bold
-                    )
+                if (state.externalImportSourceBmp == null) {
+                    Button(
+                        onClick = { picker.launch(Unit) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = TerracottaAccent)
+                    ) {
+                        Text("从相册选图纸 / 成品照", fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { picker.launch(Unit) },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = TerracottaAccent)
+                        ) {
+                            Text("相册换图", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                        }
+                        OutlinedButton(
+                            onClick = viewModel::openExternalCropDialog,
+                            modifier = Modifier.weight(1f),
+                            border = BorderStroke(1.dp, TerracottaAccent)
+                        ) {
+                            Text(
+                                if (state.isExternalCropped) "重选区域" else "放大框选区域",
+                                color = TerracottaAccent,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.5.sp
+                            )
+                        }
+                    }
+                    if (state.isExternalCropped) {
+                        TextButton(
+                            onClick = viewModel::resetExternalCropToOriginal,
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                        ) {
+                            Text("恢复识别整张原图", fontSize = 11.5.sp, color = TerracottaAccent)
+                        }
+                    }
                 }
 
                 if (state.isRecognizingExternal) {
@@ -354,5 +384,16 @@ fun ExternalImportDialog(
                 }
             }
         }
+    }
+
+    val extCropSrc = state.externalImportOriginalBmp ?: state.externalImportSourceBmp
+    if (state.showExternalCropDialog && extCropSrc != null) {
+        ImageCropDialog(
+            sourceBitmap = extCropSrc,
+            title = "放大框选图纸 / 成品区域",
+            onConfirmCrop = viewModel::applyExternalCrop,
+            onUseOriginal = viewModel::resetExternalCropToOriginal,
+            onDismiss = viewModel::dismissExternalCropDialog
+        )
     }
 }
