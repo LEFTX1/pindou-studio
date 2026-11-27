@@ -13,6 +13,13 @@ android-app/.idea/
 outputs/
 *.apk
 
+# Local scratch, third-party references & sample deliverables
+scratch/
+repos/
+inputs/
+拼豆图纸汇总/
+猫咪拼豆图纸汇总/
+
 # Python & JS caches
 __pycache__/
 *.py[cod]
