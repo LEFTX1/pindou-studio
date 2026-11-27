@@ -78,7 +78,7 @@
 
 - **🪄 纯离线拍照转拼豆（告别偏绿与断脖抠图）**
   - 提供「**照片融合精修**」与「**异形描边镂空**（自动抠底 + 1 格 H5 炭灰描边）」双模式；
-  - 针对宠物实拍优化：内置**白毛偏绿自动抑制**（自动避开 G15 / H18 / M1-7 等偏绿色阱）、**圆眼配对对称抗锯齿**，以及基于测地线与多轴凹陷桥接的轮廓抠图（解决猫咪阴影脖颈误切）。
+  - 针对宠物实拍优化：内置 **CIEDE2000 感知色差 + MRF-ICM 空间正则平滑 + 保护型微孤岛归并**，大幅减少白毛与纸箱噪点杂豆；配合**白毛偏绿自动抑制**（避开 G15 / H18 / M1-7 色阱）、**自然眼部抗锯齿**与测地线+多轴凹陷桥接抠图（稳固猫咪阴影脖颈与外轮廓）。
 - **✂️ 长方形自由拉伸框选 · 系统相册直达**
   - 全场景默认直接调起手机**原生系统相册**（告别繁琐文件管理器），自动矫正 EXIF 横竖拍方向；
   - 支持双指缩放（`1× ~ 6×`）、`90°` 旋转与四边自由拉伸长宽，并支持「**按裁剪比例自适应长方形格数**」（例如框选 `2:1` 区域自动匹配 `40×20` 格），同时提供独立宽高滑块（`12 ~ 96` 格）与 `29 / 40 / 48 / 52 / 72` 最长边预设。
@@ -101,8 +101,8 @@
 
 | 下载渠道 | 适用网络 | 直达链接 |
 | :--- | :--- | :--- |
-| 🚀 **国内加速镜像 1（推荐）** | 国内直连 | [立即下载 v1.2.5 正式签名 APK (ghfast)](https://ghfast.top/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.5/pindou-studio-v1.2.5-release.apk) |
-| ⚡ **国内加速镜像 2（备用）** | 国内直连 | [立即下载 v1.2.5 正式签名 APK (gh-proxy)](https://gh-proxy.com/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.5/pindou-studio-v1.2.5-release.apk) |
+| 🚀 **国内加速镜像 1（推荐）** | 国内直连 | [立即下载 v1.2.6 正式签名 APK (ghfast)](https://ghfast.top/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.6/pindou-studio-v1.2.6-release.apk) |
+| ⚡ **国内加速镜像 2（备用）** | 国内直连 | [立即下载 v1.2.6 正式签名 APK (gh-proxy)](https://gh-proxy.com/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.6/pindou-studio-v1.2.6-release.apk) |
 | 🌐 **GitHub Releases 官方发布页** | 全部版本与更新日志 | [前往 Releases 页面](https://github.com/LEFTX1/pindou-studio/releases/latest) |
 
 ---

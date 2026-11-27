@@ -12,7 +12,13 @@ import com.pindoustudio.app.model.calcPhysicalSpec
 import org.json.JSONArray
 import kotlin.math.ceil
 import kotlin.math.max
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.exp
+import kotlin.math.PI
 import kotlin.math.pow
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 class PaletteRepository(context: Context) {
@@ -145,6 +151,74 @@ class PaletteRepository(context: Context) {
             val da = a1 - a2
             val db = b1 - b2
             return sqrt(dl * dl + da * da + db * db)
+        }
+
+        /**
+         * 标准 CIEDE2000 感知色差（Sharma, Wu & Dalal, 2005；kL = kC = kH = 1.0）。
+         */
+        fun ciede2000(l1: Double, a1: Double, b1: Double, l2: Double, a2: Double, b2: Double): Double {
+            val c1 = sqrt(a1 * a1 + b1 * b1)
+            val c2 = sqrt(a2 * a2 + b2 * b2)
+            val cBar = 0.5 * (c1 + c2)
+            val cBar7 = cBar * cBar * cBar * cBar * cBar * cBar * cBar
+            val pow257 = 6103515625.0 // 25^7
+            val g = 0.5 * (1.0 - sqrt(cBar7 / (cBar7 + pow257)))
+
+            val a1p = (1.0 + g) * a1
+            val a2p = (1.0 + g) * a2
+            val c1p = sqrt(a1p * a1p + b1 * b1)
+            val c2p = sqrt(a2p * a2p + b2 * b2)
+
+            fun hueDeg(b: Double, ap: Double): Double {
+                if (ap == 0.0 && b == 0.0) return 0.0
+                var h = atan2(b, ap) * (180.0 / PI)
+                if (h < 0.0) h += 360.0
+                return h
+            }
+            val h1p = hueDeg(b1, a1p)
+            val h2p = hueDeg(b2, a2p)
+
+            val dLp = l2 - l1
+            val dCp = c2p - c1p
+            val c12p = c1p * c2p
+            val dhp = when {
+                c12p == 0.0 -> 0.0
+                abs(h2p - h1p) <= 180.0 -> h2p - h1p
+                h2p - h1p > 180.0 -> (h2p - h1p) - 360.0
+                else -> (h2p - h1p) + 360.0
+            }
+            val dHp = 2.0 * sqrt(c12p) * sin(0.5 * dhp * (PI / 180.0))
+
+            val lBarP = 0.5 * (l1 + l2)
+            val cBarP = 0.5 * (c1p + c2p)
+            val hBarP = when {
+                c12p == 0.0 -> h1p + h2p
+                abs(h1p - h2p) <= 180.0 -> 0.5 * (h1p + h2p)
+                h1p + h2p < 360.0 -> 0.5 * (h1p + h2p + 360.0)
+                else -> 0.5 * (h1p + h2p - 360.0)
+            }
+
+            val rad = PI / 180.0
+            val t = 1.0 -
+                0.17 * cos((hBarP - 30.0) * rad) +
+                0.24 * cos((2.0 * hBarP) * rad) +
+                0.32 * cos((3.0 * hBarP + 6.0) * rad) -
+                0.20 * cos((4.0 * hBarP - 63.0) * rad)
+
+            val dt = (hBarP - 275.0) / 25.0
+            val deltaTheta = 30.0 * exp(-(dt * dt))
+            val cBarP7 = cBarP * cBarP * cBarP * cBarP * cBarP * cBarP * cBarP
+            val rC = 2.0 * sqrt(cBarP7 / (cBarP7 + pow257))
+            val lDiffSq = (lBarP - 50.0) * (lBarP - 50.0)
+            val sL = 1.0 + (0.015 * lDiffSq) / sqrt(20.0 + lDiffSq)
+            val sC = 1.0 + 0.045 * cBarP
+            val sH = 1.0 + 0.015 * cBarP * t
+            val rT = -sin((2.0 * deltaTheta) * rad) * rC
+
+            val termL = dLp / sL
+            val termC = dCp / sC
+            val termH = dHp / sH
+            return sqrt(termL * termL + termC * termC + termH * termH + rT * termC * termH)
         }
     }
 }

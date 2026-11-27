@@ -1,12 +1,17 @@
 {
-  "versionCode": 8,
-  "versionName": "1.2.5",
+  "versionCode": 9,
+  "versionName": "1.2.6",
   "forceUpdate": false,
-  "sha256": "18050bf35a3d09b724becd1f87ec5bb880856106ffac8c5b4356db0f6e597ef6",
+  "sha256": "f0efeb256596cd9b524248f5985b452a748fc32fe9281eab1a06c9f584909aff",
   "sizeBytes": 4394977,
   "repoUrl": "https://github.com/LEFTX1/pindou-studio",
-  "changelog": "1. 优化实拍转图眼部抗锯齿与采样过渡算法：彻底消除 3×3 眼部被切成「十字纽扣眼」的问题，保留自然虹膜/眼睑柔化阴影；2. 升级跨多版本合并推送更新（A→B→C 一次直达最新版）：新增版本历史 `releaseHistory` 合并提示，老版本隔再久打开也能一站式升级至最新版并保留全部作品；3. App 顶栏新增「更新」快捷入口与「关于与开源主页」弹窗，并在作品馆底部新增「检查更新」与 GitHub 开源仓库地址（复制 / 一键直达）。",
+  "changelog": "1. 色彩量化全面升级为感知精确的 CIEDE2000 ΔE00 色差模型，消除白毛与纸箱暖阴影偏色及碎点；2. 新增「边缘梯度与暗瞳高亮显著性保护 + 4 轮 MRF-ICM 空间正则平滑 + 保护型微孤岛（<=3 格）归并」，大幅净化大面积色块杂豆并完好守住瞳孔与高光；3. 优化异形抠图纯背景防误填边界（pureBgTol 钳位），稳固猫咪脖颈连通与利落轮廓。",
   "releaseHistory": [
+    {
+      "versionCode": 9,
+      "versionName": "1.2.6",
+      "notes": "1. 色彩量化全面升级为感知精确的 CIEDE2000 ΔE00 色差模型，消除白毛与纸箱暖阴影偏色及碎点；2. 新增「边缘梯度与暗瞳高亮显著性保护 + 4 轮 MRF-ICM 空间正则平滑 + 保护型微孤岛（<=3 格）归并」，大幅净化大面积色块杂豆并完好守住瞳孔与高光；3. 优化异形抠图纯背景防误填边界（pureBgTol 钳位），稳固猫咪脖颈连通与利落轮廓。"
+    },
     {
       "versionCode": 8,
       "versionName": "1.2.5",
@@ -34,9 +39,9 @@
     }
   ],
   "apkMirrors": [
-    "https://ghfast.top/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.5/pindou-studio-v1.2.5-release.apk",
-    "https://gh-proxy.com/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.5/pindou-studio-v1.2.5-release.apk",
-    "https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.5/pindou-studio-v1.2.5-release.apk"
+    "https://ghfast.top/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.6/pindou-studio-v1.2.6-release.apk",
+    "https://gh-proxy.com/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.6/pindou-studio-v1.2.6-release.apk",
+    "https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.6/pindou-studio-v1.2.6-release.apk"
   ],
   "fallbackPageUrl": "https://github.com/LEFTX1/pindou-studio/releases"
 }

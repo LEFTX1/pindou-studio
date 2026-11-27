@@ -49,17 +49,76 @@ object NativeBeadConverter {
             sampleCoverPhoto(bitmap, tw, th, suppressGreenCast, sampledRgb, mask)
         }
 
-        // 映射至 MARD 221 子集
-        val palIdx = IntArray(tw * th)
-        for (i in 0 until tw * th) {
+        // 计算网格细胞 CIELAB + 边缘强度与高亮/暗瞳显著性保护权重
+        val nCells = tw * th
+        val palSize = subPal.size
+        val cellLabL = DoubleArray(nCells)
+        val cellLabA = DoubleArray(nCells)
+        val cellLabB = DoubleArray(nCells)
+        val cellLum = DoubleArray(nCells)
+        for (i in 0 until nCells) {
             if (!mask[i]) continue
             val col = sampledRgb[i]
-            val lab = PaletteRepository.rgbToLab(Color.red(col), Color.green(col), Color.blue(col))
+            val cr = Color.red(col)
+            val cg = Color.green(col)
+            val cb = Color.blue(col)
+            val lab = PaletteRepository.rgbToLab(cr, cg, cb)
+            cellLabL[i] = lab[0]
+            cellLabA[i] = lab[1]
+            cellLabB[i] = lab[2]
+            cellLum[i] = 0.2126 * cr + 0.7152 * cg + 0.0722 * cb
+        }
+
+        val edgeRaw = DoubleArray(nCells)
+        val fgEdgeList = DoubleArray(nCells)
+        var fgEdgeCount = 0
+        for (r in 0 until th) {
+            for (c in 0 until tw) {
+                val i = r * tw + c
+                if (!mask[i]) continue
+                var maxD = 0.0
+                val l0 = cellLabL[i]; val a0 = cellLabA[i]; val b0 = cellLabB[i]
+                if (c + 1 < tw && mask[i + 1]) maxD = max(maxD, PaletteRepository.labDist(l0, a0, b0, cellLabL[i + 1], cellLabA[i + 1], cellLabB[i + 1]))
+                if (c > 0 && mask[i - 1]) maxD = max(maxD, PaletteRepository.labDist(l0, a0, b0, cellLabL[i - 1], cellLabA[i - 1], cellLabB[i - 1]))
+                if (r + 1 < th && mask[i + tw]) maxD = max(maxD, PaletteRepository.labDist(l0, a0, b0, cellLabL[i + tw], cellLabA[i + tw], cellLabB[i + tw]))
+                if (r > 0 && mask[i - tw]) maxD = max(maxD, PaletteRepository.labDist(l0, a0, b0, cellLabL[i - tw], cellLabA[i - tw], cellLabB[i - tw]))
+                edgeRaw[i] = maxD
+                fgEdgeList[fgEdgeCount++] = maxD
+            }
+        }
+        val edgeP92 = max(1e-6, percentileDouble(fgEdgeList.copyOf(fgEdgeCount), 0.92))
+        val protection = DoubleArray(nCells)
+        for (i in 0 until nCells) {
+            if (!mask[i]) continue
+            val edgeNorm = (edgeRaw[i] / edgeP92).coerceIn(0.0, 1.0)
+            val lumProt = if (cellLum[i] <= 68.0 || cellLum[i] >= 242.0) 0.78 else 0.0
+            protection[i] = max(edgeNorm * 0.85, lumProt).coerceIn(0.0, 1.0)
+        }
+
+        // 预计算调色板内 CIEDE2000 矩阵与逐格 CIEDE2000 匹配表
+        val palDe = DoubleArray(palSize * palSize)
+        for (p in 0 until palSize) {
+            val e1 = subPal[p]
+            for (q in p + 1 until palSize) {
+                val e2 = subPal[q]
+                val d = PaletteRepository.ciede2000(e1.labL, e1.labA, e1.labB, e2.labL, e2.labA, e2.labB)
+                palDe[p * palSize + q] = d
+                palDe[q * palSize + p] = d
+            }
+        }
+
+        val deAll = DoubleArray(nCells * palSize)
+        val palIdx = IntArray(nCells)
+        for (i in 0 until nCells) {
+            if (!mask[i]) continue
+            val l0 = cellLabL[i]; val a0 = cellLabA[i]; val b0 = cellLabB[i]
+            val rowOff = i * palSize
             var bestIdx = 0
             var bestDist = Double.MAX_VALUE
-            for (p in subPal.indices) {
+            for (p in 0 until palSize) {
                 val entry = subPal[p]
-                val d = PaletteRepository.labDist(lab[0], lab[1], lab[2], entry.labL, entry.labA, entry.labB)
+                val d = PaletteRepository.ciede2000(l0, a0, b0, entry.labL, entry.labA, entry.labB)
+                deAll[rowOff + p] = d
                 if (d < bestDist) {
                     bestDist = d
                     bestIdx = p
@@ -68,7 +127,7 @@ object NativeBeadConverter {
             palIdx[i] = bestIdx
         }
 
-        // 感知低损归并到目标颜色上限（保护轮廓黑/白以及高对比小瞳孔色不被大色块吞并）
+        // 感知低损归并到目标颜色上限（按保护权重加权，守住黑/白轮廓与高对比小瞳孔/高光）
         val protectedCodes = HashSet<String>(setOf("H1", "H5", "H16", "H7"))
         for (r in 1 until th - 1) {
             for (c in 1 until tw - 1) {
@@ -88,10 +147,38 @@ object NativeBeadConverter {
                 }
             }
         }
-        reduceToColorCap(palIdx, mask, subPal, cap, protectedCodes)
+        reduceToColorCap(palIdx, mask, subPal, cap, protectedCodes, protection, palDe)
+
+        // MRF-ICM 空间正则平滑（同步收敛大块杂色同时保护高梯度的五官/边缘细节）
+        icmSmoothGrid(
+            palIdx = palIdx,
+            mask = mask,
+            protection = protection,
+            deAll = deAll,
+            palDe = palDe,
+            palSize = palSize,
+            w = tw,
+            h = th,
+            iterations = 4,
+            spatialWeight = 0.16
+        )
+
+        // 保护型微孤岛归并（仅清除 <=3 格且显著性低、色差相近的零星杂豆，保留瞳孔与高光）
+        mergeMicroIslands(
+            palIdx = palIdx,
+            mask = mask,
+            protection = protection,
+            palDe = palDe,
+            palSize = palSize,
+            w = tw,
+            h = th,
+            maxIslandSize = 3,
+            maxProtection = 0.56,
+            maxDe = 7.5
+        )
 
         // 转回 MARD 基准色号数组
-        val gridCodes = Array<String?>(tw * th) { i ->
+        val gridCodes = Array<String?>(nCells) { i ->
             if (mask[i]) subPal[palIdx[i]].code else null
         }
 
@@ -1175,13 +1262,18 @@ object NativeBeadConverter {
         // 先保留所有中小连通域（包含可能暂时分离的头部/耳朵），再执行凹陷桥接！
         keepMainComponents(photoFg, sw, sh, minAbs = 16, minFrac = 0.015f)
 
-        // 两轮多轴凹陷桥接，将阴影脖颈与身体无缝缝合
-        photoFg = healConcaveBays(photoFg, sw, sh, maxSpanFrac = 0.22f, minAxes = 2)
-        photoFg = healConcaveBays(photoFg, sw, sh, maxSpanFrac = 0.20f, minAxes = 2)
+        // 两轮多轴凹陷桥接（禁止吞并高置信纯背景区块，同时闭合阴影脖颈与耳窝）
+        val pureBgTol = min(13.0f, max(8.0f, borderP70 * 1.20f + 1.5f))
+        val pureBg = BooleanArray(n) { i ->
+            !photoFg[i] && dist[i] <= 24.0f && dBg[i] <= pureBgTol
+        }
+        photoFg = healConcaveBays(photoFg, sw, sh, maxSpanFrac = 0.22f, minAxes = 2, forbid = pureBg)
+        photoFg = healConcaveBays(photoFg, sw, sh, maxSpanFrac = 0.20f, minAxes = 2, forbid = pureBg)
 
-        // 闭运算平滑外轮廓 + 填洞 + 最终保留主连通轮廓
+        // 闭运算平滑外轮廓 + 填洞 + 剔除纯背景残留 + 最终保留主连通轮廓
         photoFg = morphDilate8(photoFg, sw, sh, 4)
         photoFg = morphErode8(photoFg, sw, sh, 4)
+        for (i in 0 until n) if (pureBg[i]) photoFg[i] = false
         fillInteriorHoles(photoFg, sw, sh)
         keepMainComponents(photoFg, sw, sh, minAbs = 30, minFrac = 0.10f)
 
@@ -1417,14 +1509,16 @@ object NativeBeadConverter {
 
     /**
      * 沿 4 组对向轴（水平、垂直、正斜、反斜）计算 O(W*H) 有向距离，
-     * 凡在 >= minAxes 条轴上两侧均为前景且总跨度 <= maxSpanFrac * max(W, H) 的背景凹槽，判定为被主体半包围的阴影（如猫颈、耳窝），予以桥接闭合。
+     * 凡在 >= minAxes 条轴上两侧均为前景且总跨度 <= maxSpanFrac * max(W, H) 的背景凹槽，判定为被主体半包围的阴影（如猫颈、耳窝），予以桥接闭合；
+     * 若 forbid[i] 为 true，则禁止覆盖高置信纯背景区块。
      */
     private fun healConcaveBays(
         fg: BooleanArray,
         w: Int,
         h: Int,
         maxSpanFrac: Float,
-        minAxes: Int
+        minAxes: Int,
+        forbid: BooleanArray? = null
     ): BooleanArray {
         val n = w * h
         val inf = 99999
@@ -1467,7 +1561,18 @@ object NativeBeadConverter {
                 }
             }
         }
-        return BooleanArray(n) { i -> fg[i] || enclosed[i] >= minAxes }
+        return BooleanArray(n) { i ->
+            val forbidden = forbid != null && forbid[i]
+            !forbidden && (fg[i] || enclosed[i] >= minAxes)
+        }
+    }
+
+    private fun percentileDouble(vals: DoubleArray, frac: Double): Double {
+        if (vals.isEmpty()) return 0.0
+        val copy = vals.copyOf()
+        copy.sort()
+        val idx = ((copy.size - 1) * frac).roundToInt().coerceIn(0, copy.lastIndex)
+        return copy[idx]
     }
 
     private fun reduceToColorCap(
@@ -1475,16 +1580,23 @@ object NativeBeadConverter {
         mask: BooleanArray,
         pal: List<PaletteColor>,
         targetColors: Int,
-        protectedCodes: Set<String>
+        protectedCodes: Set<String>,
+        protection: DoubleArray,
+        palDe: DoubleArray
     ) {
+        val palSize = pal.size
         while (true) {
-            val counts = HashMap<Int, Int>()
+            val weightedCounts = HashMap<Int, Double>()
             for (i in palIdx.indices) {
-                if (mask[i]) counts[palIdx[i]] = (counts[palIdx[i]] ?: 0) + 1
+                if (mask[i]) {
+                    val p = palIdx[i]
+                    val w = 1.0 + 0.65 * protection[i]
+                    weightedCounts[p] = (weightedCounts[p] ?: 0.0) + w
+                }
             }
-            if (counts.size <= targetColors) break
+            if (weightedCounts.size <= targetColors) break
 
-            val present = counts.keys.toList()
+            val present = weightedCounts.keys.toList()
             var bestSrc = -1
             var bestDst = -1
             var bestCost = Double.MAX_VALUE
@@ -1492,12 +1604,11 @@ object NativeBeadConverter {
             for (pass in 0..1) {
                 for (src in present) {
                     if (pass == 0 && pal[src].code in protectedCodes) continue
-                    val e1 = pal[src]
-                    val cSrc = counts[src] ?: 0
+                    val cSrc = weightedCounts[src] ?: 0.0
+                    val srcRow = src * palSize
                     for (dst in present) {
                         if (dst == src) continue
-                        val e2 = pal[dst]
-                        val de = PaletteRepository.labDist(e1.labL, e1.labA, e1.labB, e2.labL, e2.labA, e2.labB)
+                        val de = palDe[srcRow + dst]
                         val cost = cSrc * de.pow(1.4)
                         if (cost < bestCost) {
                             bestCost = cost
@@ -1511,6 +1622,177 @@ object NativeBeadConverter {
             if (bestSrc == -1) break
             for (i in palIdx.indices) {
                 if (mask[i] && palIdx[i] == bestSrc) palIdx[i] = bestDst
+            }
+        }
+    }
+
+    /**
+     * 基于 CIEDE2000 数据项 + 邻居空间正则项的 Iterated Conditional Modes (ICM) 平滑。
+     * 高保护权重细胞（五官瞳孔、高亮与清晰结构边缘）通过高保真因子避免被抹糊。
+     */
+    private fun icmSmoothGrid(
+        palIdx: IntArray,
+        mask: BooleanArray,
+        protection: DoubleArray,
+        deAll: DoubleArray,
+        palDe: DoubleArray,
+        palSize: Int,
+        w: Int,
+        h: Int,
+        iterations: Int = 4,
+        spatialWeight: Double = 0.16
+    ) {
+        val cands = IntArray(9)
+        val nbrLabels = IntArray(8)
+        val nbrWeights = DoubleArray(8)
+        repeat(iterations) {
+            val prev = palIdx.copyOf()
+            for (r in 0 until h) {
+                for (c in 0 until w) {
+                    val i = r * w + c
+                    if (!mask[i] || protection[i] >= 0.80) continue
+
+                    val curLabel = prev[i]
+                    var candCount = 1
+                    cands[0] = curLabel
+                    var nbrCount = 0
+                    var weightSum = 0.0
+
+                    for (dr in -1..1) {
+                        val nr = r + dr
+                        if (nr !in 0 until h) continue
+                        for (dc in -1..1) {
+                            if (dr == 0 && dc == 0) continue
+                            val nc = c + dc
+                            if (nc !in 0 until w) continue
+                            val ni = nr * w + nc
+                            if (!mask[ni]) continue
+                            val nl = prev[ni]
+                            val nw = if (dr == 0 || dc == 0) 1.0 else 0.65
+                            nbrLabels[nbrCount] = nl
+                            nbrWeights[nbrCount] = nw
+                            nbrCount++
+                            weightSum += nw
+
+                            var seen = false
+                            for (k in 0 until candCount) {
+                                if (cands[k] == nl) {
+                                    seen = true
+                                    break
+                                }
+                            }
+                            if (!seen && candCount < 9) {
+                                cands[candCount++] = nl
+                            }
+                        }
+                    }
+
+                    if (candCount <= 1 || nbrCount == 0 || weightSum <= 0.0) continue
+
+                    val rowOff = i * palSize
+                    val fidelityMult = 1.0 + 0.55 * protection[i]
+                    var bestLabel = curLabel
+                    var bestScore = Double.MAX_VALUE
+                    for (k in 0 until candCount) {
+                        val cand = cands[k]
+                        val dataCost = deAll[rowOff + cand] * fidelityMult
+                        var pairSum = 0.0
+                        val candRow = cand * palSize
+                        for (m in 0 until nbrCount) {
+                            pairSum += palDe[candRow + nbrLabels[m]] * nbrWeights[m]
+                        }
+                        val score = dataCost + spatialWeight * (pairSum / weightSum)
+                        if (score < bestScore) {
+                            bestScore = score
+                            bestLabel = cand
+                        }
+                    }
+                    palIdx[i] = bestLabel
+                }
+            }
+        }
+    }
+
+    /**
+     * 合并 <= maxIslandSize 格、且最大显著性保护不超过阈值的零星微小色块，消除纯色底/白毛中的椒盐杂豆。
+     */
+    private fun mergeMicroIslands(
+        palIdx: IntArray,
+        mask: BooleanArray,
+        protection: DoubleArray,
+        palDe: DoubleArray,
+        palSize: Int,
+        w: Int,
+        h: Int,
+        maxIslandSize: Int = 3,
+        maxProtection: Double = 0.56,
+        maxDe: Double = 7.5
+    ) {
+        val n = w * h
+        val visited = BooleanArray(n)
+        val queue = IntArray(n)
+        for (start in 0 until n) {
+            if (!mask[start] || visited[start]) continue
+            val color = palIdx[start]
+            var head = 0
+            var tail = 0
+            visited[start] = true
+            queue[tail++] = start
+            var maxProt = protection[start]
+
+            while (head < tail) {
+                val cur = queue[head++]
+                val cr = cur / w
+                val cc = cur % w
+                fun tryPush(ni: Int) {
+                    if (mask[ni] && !visited[ni] && palIdx[ni] == color) {
+                        visited[ni] = true
+                        queue[tail++] = ni
+                        if (protection[ni] > maxProt) maxProt = protection[ni]
+                    }
+                }
+                if (cr > 0) tryPush(cur - w)
+                if (cr + 1 < h) tryPush(cur + w)
+                if (cc > 0) tryPush(cur - 1)
+                if (cc + 1 < w) tryPush(cur + 1)
+            }
+
+            if (tail > maxIslandSize || maxProt > maxProtection) continue
+
+            val nbrCounts = HashMap<Int, Int>()
+            for (k in 0 until tail) {
+                val cur = queue[k]
+                val cr = cur / w
+                val cc = cur % w
+                fun collectNbr(ni: Int) {
+                    if (mask[ni] && palIdx[ni] != color) {
+                        val nc = palIdx[ni]
+                        nbrCounts[nc] = (nbrCounts[nc] ?: 0) + 1
+                    }
+                }
+                if (cr > 0) collectNbr(cur - w)
+                if (cr + 1 < h) collectNbr(cur + w)
+                if (cc > 0) collectNbr(cur - 1)
+                if (cc + 1 < w) collectNbr(cur + 1)
+            }
+
+            if (nbrCounts.isEmpty()) continue
+            var bestTarget = -1
+            var bestDe = Double.MAX_VALUE
+            var bestContact = -1
+            val srcRow = color * palSize
+            for ((target, contact) in nbrCounts) {
+                val d = palDe[srcRow + target]
+                if (d < bestDe - 1e-6 || (abs(d - bestDe) <= 1e-6 && contact > bestContact)) {
+                    bestDe = d
+                    bestTarget = target
+                    bestContact = contact
+                }
+            }
+            if (bestTarget != -1 && bestDe < maxDe) {
+                for (k in 0 until tail) {
+                    palIdx[queue[k]] = bestTarget
+                }
             }
         }
     }
