@@ -1,14 +1,14 @@
 {
-  "versionCode": 4,
-  "versionName": "1.2.1",
+  "versionCode": 5,
+  "versionName": "1.2.2",
   "forceUpdate": false,
-  "sha256": "64d0caf29875a5b2a0418d5cf59ded7da13b225c78f1788ef1de623c4dee4446",
-  "sizeBytes": 4345577,
-  "changelog": "1. 全新上线【豆绘工坊】专属手作拼豆品牌 Logo 与桌面自适应图标；2. 顶栏新增品牌徽标展示；3. 验证云端免梯一键推送更新全链路。",
+  "sha256": "3fefa2bccfc8e480837f0875139a733c727e34fabc94197f082cf3b838837b41",
+  "sizeBytes": 4362205,
+  "changelog": "1. 修复异形描边镂空模式下实拍宠物照片（如猫咪阴影脖颈）被误切割的问题，升级离线测地线抠图与多轴凹陷桥接算法；2. 全场景图片导入（图转豆 / 历史图纸识别 / 作品馆相册槽位）默认直达系统原生相册，告别文件管理器。",
   "apkMirrors": [
-    "https://ghfast.top/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.1/pindou-studio-v1.2.1-release.apk",
-    "https://gh-proxy.com/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.1/pindou-studio-v1.2.1-release.apk",
-    "https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.1/pindou-studio-v1.2.1-release.apk"
+    "https://ghfast.top/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.2/pindou-studio-v1.2.2-release.apk",
+    "https://gh-proxy.com/https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.2/pindou-studio-v1.2.2-release.apk",
+    "https://github.com/LEFTX1/pindou-studio/releases/download/v1.2.2/pindou-studio-v1.2.2-release.apk"
   ],
   "fallbackPageUrl": "https://github.com/LEFTX1/pindou-studio/releases"
 }

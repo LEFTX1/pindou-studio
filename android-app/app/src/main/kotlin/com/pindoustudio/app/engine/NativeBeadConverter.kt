@@ -8,10 +8,12 @@ import com.pindoustudio.app.model.BeadPattern
 import com.pindoustudio.app.model.ConvertMode
 import com.pindoustudio.app.model.PaletteColor
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 /**
  * 纯离线安卓端图转拼豆量化引擎：
@@ -798,7 +800,7 @@ object NativeBeadConverter {
         outRgb: IntArray,
         outMask: BooleanArray
     ) {
-        val maxDim = 320f
+        val maxDim = 200f
         val sRatio = min(1f, maxDim / max(src.width, src.height))
         val sw = (src.width * sRatio).roundToInt().coerceAtLeast(16)
         val sh = (src.height * sRatio).roundToInt().coerceAtLeast(16)
@@ -807,38 +809,7 @@ object NativeBeadConverter {
         work.getPixels(px, 0, sw, 0, 0, sw, sh)
         if (work !== src) work.recycle()
 
-        val alphaTransparentRatio = px.count { Color.alpha(it) < 128 }.toFloat() / px.size
-        val fg = BooleanArray(sw * sh) { i -> Color.alpha(px[i]) >= 128 }
-
-        if (alphaTransparentRatio < 0.04f) {
-            val bgColor = px[0]
-            val bgR = Color.red(bgColor)
-            val bgG = Color.green(bgColor)
-            val bgB = Color.blue(bgColor)
-            val visited = BooleanArray(sw * sh)
-            val queue = ArrayDeque<Int>()
-            for (seed in intArrayOf(0, sw - 1, (sh - 1) * sw, sh * sw - 1)) {
-                visited[seed] = true
-                queue.addLast(seed)
-            }
-            val threshSq = 32 * 32 * 3
-            while (queue.isNotEmpty()) {
-                val cur = queue.removeFirst()
-                val col = px[cur]
-                val dr = Color.red(col) - bgR
-                val dg = Color.green(col) - bgG
-                val db = Color.blue(col) - bgB
-                if (dr * dr + dg * dg + db * db <= threshSq) {
-                    fg[cur] = false
-                    val r = cur / sw
-                    val c = cur % sw
-                    if (r > 0 && !visited[cur - sw]) { visited[cur - sw] = true; queue.addLast(cur - sw) }
-                    if (r + 1 < sh && !visited[cur + sw]) { visited[cur + sw] = true; queue.addLast(cur + sw) }
-                    if (c > 0 && !visited[cur - 1]) { visited[cur - 1] = true; queue.addLast(cur - 1) }
-                    if (c + 1 < sw && !visited[cur + 1]) { visited[cur + 1] = true; queue.addLast(cur + 1) }
-                }
-            }
-        }
+        val fg = segmentCutoutForeground(px, sw, sh)
 
         var minX = sw; var maxX = 0; var minY = sh; var maxY = 0
         for (r in 0 until sh) {
@@ -892,6 +863,617 @@ object NativeBeadConverter {
                 }
             }
         }
+    }
+
+    /**
+     * 三模态纯离线前景抠图：
+     * 1) 透明底 PNG 直接走 Alpha 通道；
+     * 2) 极纯色插画/贴纸背景走边缘统一色阈值漫水填充；
+     * 3) 实拍照片走边界色彩聚类的边沿梯度+纹理测地线扩散，并联合地砖细线开运算剥离
+     *    及多轴凹陷桥接（修复猫颈/耳根因阴影反光与背景相近而被斜向切割的问题）。
+     */
+    private fun segmentCutoutForeground(px: IntArray, sw: Int, sh: Int): BooleanArray {
+        val n = sw * sh
+        var transparentCnt = 0
+        for (i in 0 until n) {
+            if (Color.alpha(px[i]) < 128) transparentCnt++
+        }
+        val fg = BooleanArray(n) { i -> Color.alpha(px[i]) >= 128 }
+        if (transparentCnt.toFloat() / n >= 0.04f) {
+            return fg
+        }
+
+        // 计算原始与 5x5 高斯平滑 CIE Lab（抑制地板缝隙与高频噪点，避免毛发过糊）
+        val rawR = FloatArray(n)
+        val rawG = FloatArray(n)
+        val rawB = FloatArray(n)
+        val labRawL = FloatArray(n)
+        val labRawA = FloatArray(n)
+        val labRawB = FloatArray(n)
+        for (i in 0 until n) {
+            val col = px[i]
+            val r = Color.red(col)
+            val g = Color.green(col)
+            val b = Color.blue(col)
+            rawR[i] = r.toFloat()
+            rawG[i] = g.toFloat()
+            rawB[i] = b.toFloat()
+            val lab = PaletteRepository.rgbToLab(r, g, b)
+            labRawL[i] = lab[0].toFloat()
+            labRawA[i] = lab[1].toFloat()
+            labRawB[i] = lab[2].toFloat()
+        }
+
+        val smR = gaussianSmooth5(rawR, sw, sh)
+        val smG = gaussianSmooth5(rawG, sw, sh)
+        val smB = gaussianSmooth5(rawB, sw, sh)
+        val labL = FloatArray(n)
+        val labA = FloatArray(n)
+        val labB = FloatArray(n)
+        for (i in 0 until n) {
+            val lab = PaletteRepository.rgbToLab(
+                smR[i].roundToInt().coerceIn(0, 255),
+                smG[i].roundToInt().coerceIn(0, 255),
+                smB[i].roundToInt().coerceIn(0, 255)
+            )
+            labL[i] = lab[0].toFloat()
+            labA[i] = lab[1].toFloat()
+            labB[i] = lab[2].toFloat()
+        }
+
+        // 边界环带采样
+        val bw = max(2, min(sw, sh) / 40)
+        val borderIdxList = IntArray(n)
+        var bCount = 0
+        for (r in 0 until sh) {
+            for (c in 0 until sw) {
+                if (r < bw || r >= sh - bw || c < bw || c >= sw - bw) {
+                    borderIdxList[bCount++] = r * sw + c
+                }
+            }
+        }
+        val borderIndices = borderIdxList.copyOf(bCount)
+
+        // Mode 2: 边界单色均匀性检测（插画/贴纸等纯白或纯色底）
+        val bL = FloatArray(bCount) { labL[borderIndices[it]] }
+        val bA = FloatArray(bCount) { labA[borderIndices[it]] }
+        val bB = FloatArray(bCount) { labB[borderIndices[it]] }
+        val medL = percentileFloat(bL, 0.50f)
+        val medA = percentileFloat(bA, 0.50f)
+        val medB = percentileFloat(bB, 0.50f)
+        val singleDists = FloatArray(bCount) { k ->
+            val dl = bL[k] - medL
+            val da = bA[k] - medA
+            val db = bB[k] - medB
+            sqrt(dl * dl + da * da + db * db)
+        }
+        val singleP50 = percentileFloat(singleDists, 0.50f)
+        val singleP85 = percentileFloat(singleDists, 0.85f)
+
+        if (singleP85 < 4.5f && singleP50 < 2.2f) {
+            val thresh = max(8.0f, singleP85 * 2.2f + 4.0f)
+            val bg = BooleanArray(n)
+            val q = IntArray(n)
+            var qHead = 0
+            var qTail = 0
+            fun trySeed(idx: Int) {
+                if (bg[idx]) return
+                val dl = labRawL[idx] - medL
+                val da = labRawA[idx] - medA
+                val db = labRawB[idx] - medB
+                if (dl * dl + da * da + db * db <= thresh * thresh) {
+                    bg[idx] = true
+                    q[qTail++] = idx
+                }
+            }
+            for (r in 0 until sh) {
+                trySeed(r * sw)
+                trySeed(r * sw + sw - 1)
+            }
+            for (c in 0 until sw) {
+                trySeed(c)
+                trySeed((sh - 1) * sw + c)
+            }
+            while (qHead < qTail) {
+                val cur = q[qHead++]
+                val cr = cur / sw
+                val cc = cur % sw
+                if (cr > 0) trySeed(cur - sw)
+                if (cr + 1 < sh) trySeed(cur + sw)
+                if (cc > 0) trySeed(cur - 1)
+                if (cc + 1 < sw) trySeed(cur + 1)
+            }
+            val flatFg = BooleanArray(n) { !bg[it] }
+            fillInteriorHoles(flatFg, sw, sh)
+            keepMainComponents(flatFg, sw, sh, minAbs = 16, minFrac = 0.03f)
+            return flatFg
+        }
+
+        // Mode 3: 边界多簇色彩建模（保留主簇与同色系受光照变化影响的背景簇）
+        val clusters = kmeansLabClusters(bL, bA, bB, maxK = 4, iters = 8)
+        val primary = clusters[0]
+        val domClusters = ArrayList<FloatArray>(3)
+        domClusters.add(primary)
+        for (k in 1 until clusters.size) {
+            if (domClusters.size >= 3) break
+            val cl = clusters[k]
+            val chromaD = hypot(cl[1] - primary[1], cl[2] - primary[2])
+            val fullD = sqrt(
+                (cl[0] - primary[0]) * (cl[0] - primary[0]) +
+                    (cl[1] - primary[1]) * (cl[1] - primary[1]) +
+                    (cl[2] - primary[2]) * (cl[2] - primary[2])
+            )
+            if (chromaD <= 18.0f && fullD <= 32.0f) {
+                domClusters.add(cl)
+            }
+        }
+
+        // 对色度 (a, b) 加权 1.35，有助于区分暖色地砖与冷灰白猫颈部阴影
+        val dBg = FloatArray(n)
+        for (i in 0 until n) {
+            val l = labL[i]
+            val a = labA[i]
+            val b = labB[i]
+            var best = Float.MAX_VALUE
+            for (cl in domClusters) {
+                val dl = l - cl[0]
+                val da = (a - cl[1]) * 1.35f
+                val db = (b - cl[2]) * 1.35f
+                val d = sqrt(dl * dl + da * da + db * db)
+                if (d < best) best = d
+            }
+            dBg[i] = best
+        }
+
+        val borderDbg = FloatArray(bCount) { dBg[borderIndices[it]] }
+        val borderP70 = percentileFloat(borderDbg, 0.70f)
+        val borderP85 = percentileFloat(borderDbg, 0.85f)
+
+        val y0 = (sh * 0.25f).toInt()
+        val y1 = (sh * 0.75f).toInt()
+        val x0 = (sw * 0.25f).toInt()
+        val x1 = (sw * 0.75f).toInt()
+        val centerThresh = max(12.0f, borderP70 * 1.4f)
+        var centerTotal = 0
+        var centerFg = 0
+        for (r in y0 until y1) {
+            for (c in x0 until x1) {
+                centerTotal++
+                if (dBg[r * sw + c] > centerThresh) centerFg++
+            }
+        }
+        val centerFgRatio = if (centerTotal > 0) centerFg.toFloat() / centerTotal else 1f
+
+        // 满幅特写保护：若主体充满四边，保留整图避免撕裂面部
+        if (borderP70 > 13.0f || centerFgRatio < 0.22f) {
+            val fullFg = BooleanArray(n) { true }
+            return fullFg
+        }
+
+        // 测地线最短路径开销场（梯度屏障 + 局部毛发纹理 + 中心保护）
+        val stepCost = FloatArray(n)
+        val baseTol = (borderP70 * 1.35f + 3.0f).coerceIn(7.0f, 14.0f)
+        val halfW = sw * 0.5f
+        val halfH = sh * 0.5f
+        for (r in 0 until sh) {
+            for (c in 0 until sw) {
+                val i = r * sw + c
+                val gxL = if (c in 1 until sw - 1) (labL[i + 1] - labL[i - 1]) * 0.5f else 0f
+                val gxA = if (c in 1 until sw - 1) (labA[i + 1] - labA[i - 1]) * 0.5f else 0f
+                val gxB = if (c in 1 until sw - 1) (labB[i + 1] - labB[i - 1]) * 0.5f else 0f
+                val gyL = if (r in 1 until sh - 1) (labL[i + sw] - labL[i - sw]) * 0.5f else 0f
+                val gyA = if (r in 1 until sh - 1) (labA[i + sw] - labA[i - sw]) * 0.5f else 0f
+                val gyB = if (r in 1 until sh - 1) (labB[i + sw] - labB[i - sw]) * 0.5f else 0f
+                val gx = sqrt(gxL * gxL + gxA * gxA + gxB * gxB)
+                val gy = sqrt(gyL * gyL + gyA * gyA + gyB * gyB)
+                val grad = hypot(gx, gy)
+
+                val tL = labRawL[i] - labL[i]
+                val tA = labRawA[i] - labA[i]
+                val tB = labRawB[i] - labB[i]
+                val tex = sqrt(tL * tL + tA * tA + tB * tB)
+
+                val rad = hypot((c - halfW) / halfW, (r - halfH) / halfH)
+                val centerW = (1.0f - rad).coerceIn(0f, 1f)
+                val excess = max(0f, dBg[i] - baseTol)
+                stepCost[i] = 0.14f +
+                    excess * 1.45f +
+                    max(0f, grad - 3.5f) * 1.30f +
+                    max(0f, tex - 2.8f) * 0.80f +
+                    centerW * 0.50f
+            }
+        }
+
+        val dist = FloatArray(n) { 1e9f }
+        val heapIdx = IntArray(n * 4 + 16)
+        val heapDist = FloatArray(n * 4 + 16)
+        var heapSize = 0
+        fun heapPush(idx: Int, d: Float) {
+            var pos = ++heapSize
+            if (pos >= heapIdx.size) return
+            heapIdx[pos] = idx
+            heapDist[pos] = d
+            while (pos > 1) {
+                val parent = pos ushr 1
+                if (heapDist[parent] <= heapDist[pos]) break
+                val ti = heapIdx[parent]; val td = heapDist[parent]
+                heapIdx[parent] = heapIdx[pos]; heapDist[parent] = heapDist[pos]
+                heapIdx[pos] = ti; heapDist[pos] = td
+                pos = parent
+            }
+        }
+        fun heapPop(): Int {
+            val top = heapIdx[1]
+            heapIdx[1] = heapIdx[heapSize]
+            heapDist[1] = heapDist[heapSize]
+            heapSize--
+            var pos = 1
+            while (true) {
+                val left = pos shl 1
+                if (left > heapSize) break
+                val right = left + 1
+                val smallest = if (right <= heapSize && heapDist[right] < heapDist[left]) right else left
+                if (heapDist[pos] <= heapDist[smallest]) break
+                val ti = heapIdx[pos]; val td = heapDist[pos]
+                heapIdx[pos] = heapIdx[smallest]; heapDist[pos] = heapDist[smallest]
+                heapIdx[smallest] = ti; heapDist[smallest] = td
+                pos = smallest
+            }
+            return top
+        }
+
+        val seedTol = max(11.0f, borderP85 * 1.30f + 3.0f)
+        for (r in 0 until sh) {
+            val leftIdx = r * sw
+            if (dBg[leftIdx] <= seedTol && dist[leftIdx] > 0f) {
+                dist[leftIdx] = 0f
+                heapPush(leftIdx, 0f)
+            }
+            val rightIdx = r * sw + sw - 1
+            if (dBg[rightIdx] <= seedTol && dist[rightIdx] > 0f) {
+                dist[rightIdx] = 0f
+                heapPush(rightIdx, 0f)
+            }
+        }
+        for (c in 0 until sw) {
+            if (dBg[c] <= seedTol && dist[c] > 0f) {
+                dist[c] = 0f
+                heapPush(c, 0f)
+            }
+            val botIdx = (sh - 1) * sw + c
+            if (dBg[botIdx] <= seedTol && dist[botIdx] > 0f) {
+                dist[botIdx] = 0f
+                heapPush(botIdx, 0f)
+            }
+        }
+
+        while (heapSize > 0) {
+            val d = heapDist[1]
+            val cur = heapPop()
+            if (d > dist[cur] + 1e-4f) continue
+            if (d > 65.0f) break
+            val cr = cur / sw
+            val cc = cur % sw
+            val l0 = labL[cur]; val a0 = labA[cur]; val b0 = labB[cur]
+            fun relax(nr: Int, nc: Int) {
+                val ni = nr * sw + nc
+                val dl = labL[ni] - l0
+                val da = labA[ni] - a0
+                val db = labB[ni] - b0
+                val stepLab = sqrt(dl * dl + da * da + db * db)
+                val nd = d + stepCost[ni] + max(0f, stepLab - 4.0f) * 1.5f
+                if (nd < dist[ni]) {
+                    dist[ni] = nd
+                    heapPush(ni, nd)
+                }
+            }
+            if (cr > 0) relax(cr - 1, cc)
+            if (cr + 1 < sh) relax(cr + 1, cc)
+            if (cc > 0) relax(cr, cc - 1)
+            if (cc + 1 < sw) relax(cr, cc + 1)
+        }
+
+        var photoFg = BooleanArray(n) { dist[it] > 38.0f }
+
+        // 先做开运算去除地砖细缝毛刺（r=2 保护猫耳尖）
+        photoFg = morphErode8(photoFg, sw, sh, 2)
+        photoFg = morphDilate8(photoFg, sw, sh, 2)
+        // 先保留所有中小连通域（包含可能暂时分离的头部/耳朵），再执行凹陷桥接！
+        keepMainComponents(photoFg, sw, sh, minAbs = 16, minFrac = 0.015f)
+
+        // 两轮多轴凹陷桥接，将阴影脖颈与身体无缝缝合
+        photoFg = healConcaveBays(photoFg, sw, sh, maxSpanFrac = 0.22f, minAxes = 2)
+        photoFg = healConcaveBays(photoFg, sw, sh, maxSpanFrac = 0.20f, minAxes = 2)
+
+        // 闭运算平滑外轮廓 + 填洞 + 最终保留主连通轮廓
+        photoFg = morphDilate8(photoFg, sw, sh, 4)
+        photoFg = morphErode8(photoFg, sw, sh, 4)
+        fillInteriorHoles(photoFg, sw, sh)
+        keepMainComponents(photoFg, sw, sh, minAbs = 30, minFrac = 0.10f)
+
+        var fgSum = 0
+        for (b in photoFg) if (b) fgSum++
+        if (fgSum < (n * 0.12f).toInt()) {
+            photoFg.fill(true)
+        }
+        return photoFg
+    }
+
+    private fun gaussianSmooth5(src: FloatArray, w: Int, h: Int): FloatArray {
+        val k0 = 1f / 16f
+        val k1 = 4f / 16f
+        val k2 = 6f / 16f
+        val tmp = FloatArray(w * h)
+        for (r in 0 until h) {
+            val row = r * w
+            for (c in 0 until w) {
+                val cL2 = src[row + (c - 2).coerceIn(0, w - 1)]
+                val cL1 = src[row + (c - 1).coerceIn(0, w - 1)]
+                val c0 = src[row + c]
+                val cR1 = src[row + (c + 1).coerceIn(0, w - 1)]
+                val cR2 = src[row + (c + 2).coerceIn(0, w - 1)]
+                tmp[row + c] = (cL2 + cR2) * k0 + (cL1 + cR1) * k1 + c0 * k2
+            }
+        }
+        val out = FloatArray(w * h)
+        for (r in 0 until h) {
+            val rU2 = (r - 2).coerceIn(0, h - 1) * w
+            val rU1 = (r - 1).coerceIn(0, h - 1) * w
+            val r0 = r * w
+            val rD1 = (r + 1).coerceIn(0, h - 1) * w
+            val rD2 = (r + 2).coerceIn(0, h - 1) * w
+            for (c in 0 until w) {
+                out[r0 + c] = (tmp[rU2 + c] + tmp[rD2 + c]) * k0 +
+                    (tmp[rU1 + c] + tmp[rD1 + c]) * k1 +
+                    tmp[r0 + c] * k2
+            }
+        }
+        return out
+    }
+
+    private fun percentileFloat(vals: FloatArray, frac: Float): Float {
+        if (vals.isEmpty()) return 0f
+        val copy = vals.copyOf()
+        copy.sort()
+        val idx = ((copy.size - 1) * frac).roundToInt().coerceIn(0, copy.size - 1)
+        return copy[idx]
+    }
+
+    private fun kmeansLabClusters(
+        ptsL: FloatArray,
+        ptsA: FloatArray,
+        ptsB: FloatArray,
+        maxK: Int,
+        iters: Int
+    ): List<FloatArray> {
+        val n = ptsL.size
+        if (n == 0) return listOf(floatArrayOf(50f, 0f, 0f))
+        val k = min(maxK, n)
+        val cL = FloatArray(k)
+        val cA = FloatArray(k)
+        val cB = FloatArray(k)
+        val step = max(1, n / k)
+        for (j in 0 until k) {
+            val idx = min(n - 1, j * step)
+            cL[j] = ptsL[idx]; cA[j] = ptsA[idx]; cB[j] = ptsB[idx]
+        }
+        val lbl = IntArray(n)
+        val sumL = FloatArray(k)
+        val sumA = FloatArray(k)
+        val sumB = FloatArray(k)
+        val cnt = IntArray(k)
+        repeat(iters) {
+            sumL.fill(0f); sumA.fill(0f); sumB.fill(0f); cnt.fill(0)
+            for (i in 0 until n) {
+                val l = ptsL[i]; val a = ptsA[i]; val b = ptsB[i]
+                var bestJ = 0
+                var bestD = Float.MAX_VALUE
+                for (j in 0 until k) {
+                    val dl = l - cL[j]; val da = a - cA[j]; val db = b - cB[j]
+                    val d = dl * dl + da * da + db * db
+                    if (d < bestD) { bestD = d; bestJ = j }
+                }
+                lbl[i] = bestJ
+                sumL[bestJ] += l; sumA[bestJ] += a; sumB[bestJ] += b; cnt[bestJ]++
+            }
+            for (j in 0 until k) {
+                if (cnt[j] > 0) {
+                    cL[j] = sumL[j] / cnt[j]
+                    cA[j] = sumA[j] / cnt[j]
+                    cB[j] = sumB[j] / cnt[j]
+                }
+            }
+        }
+        cnt.fill(0)
+        for (i in 0 until n) {
+            val l = ptsL[i]; val a = ptsA[i]; val b = ptsB[i]
+            var bestJ = 0
+            var bestD = Float.MAX_VALUE
+            for (j in 0 until k) {
+                val dl = l - cL[j]; val da = a - cA[j]; val db = b - cB[j]
+                val d = dl * dl + da * da + db * db
+                if (d < bestD) { bestD = d; bestJ = j }
+            }
+            cnt[bestJ]++
+        }
+        val indexed = (0 until k)
+            .filter { cnt[it].toFloat() / n >= 0.05f }
+            .sortedByDescending { cnt[it] }
+        if (indexed.isEmpty()) {
+            val top = (0 until k).maxBy { cnt[it] }
+            return listOf(floatArrayOf(cL[top], cA[top], cB[top]))
+        }
+        return indexed.map { floatArrayOf(cL[it], cA[it], cB[it]) }
+    }
+
+    private fun morphErode8(mask: BooleanArray, w: Int, h: Int, radius: Int): BooleanArray {
+        var cur = mask.copyOf()
+        repeat(radius) {
+            val next = BooleanArray(w * h)
+            for (r in 1 until h - 1) {
+                val row = r * w
+                for (c in 1 until w - 1) {
+                    val i = row + c
+                    if (cur[i - w - 1] && cur[i - w] && cur[i - w + 1] &&
+                        cur[i - 1] && cur[i] && cur[i + 1] &&
+                        cur[i + w - 1] && cur[i + w] && cur[i + w + 1]
+                    ) {
+                        next[i] = true
+                    }
+                }
+            }
+            cur = next
+        }
+        return cur
+    }
+
+    private fun morphDilate8(mask: BooleanArray, w: Int, h: Int, radius: Int): BooleanArray {
+        var cur = mask.copyOf()
+        repeat(radius) {
+            val next = BooleanArray(w * h)
+            for (r in 0 until h) {
+                for (c in 0 until w) {
+                    var any = false
+                    for (dr in -1..1) {
+                        val nr = r + dr
+                        if (nr !in 0 until h) continue
+                        val nRow = nr * w
+                        for (dc in -1..1) {
+                            val nc = c + dc
+                            if (nc in 0 until w && cur[nRow + nc]) {
+                                any = true; break
+                            }
+                        }
+                        if (any) break
+                    }
+                    next[r * w + c] = any
+                }
+            }
+            cur = next
+        }
+        return cur
+    }
+
+    private fun fillInteriorHoles(fg: BooleanArray, w: Int, h: Int) {
+        val n = w * h
+        val ext = BooleanArray(n)
+        val q = IntArray(n)
+        var head = 0
+        var tail = 0
+        fun tryExt(idx: Int) {
+            if (!fg[idx] && !ext[idx]) {
+                ext[idx] = true
+                q[tail++] = idx
+            }
+        }
+        for (c in 0 until w) {
+            tryExt(c)
+            tryExt((h - 1) * w + c)
+        }
+        for (r in 0 until h) {
+            tryExt(r * w)
+            tryExt(r * w + w - 1)
+        }
+        while (head < tail) {
+            val cur = q[head++]
+            val cr = cur / w
+            val cc = cur % w
+            if (cr > 0) tryExt(cur - w)
+            if (cr + 1 < h) tryExt(cur + w)
+            if (cc > 0) tryExt(cur - 1)
+            if (cc + 1 < w) tryExt(cur + 1)
+        }
+        for (i in 0 until n) {
+            if (!ext[i]) fg[i] = true
+        }
+    }
+
+    private fun keepMainComponents(fg: BooleanArray, w: Int, h: Int, minAbs: Int, minFrac: Float) {
+        val n = w * h
+        val visited = BooleanArray(n)
+        val compSizes = ArrayList<IntArray>()
+        val q = IntArray(n)
+        for (i in 0 until n) {
+            if (!fg[i] || visited[i]) continue
+            var head = 0
+            var tail = 0
+            visited[i] = true
+            q[tail++] = i
+            while (head < tail) {
+                val cur = q[head++]
+                val cr = cur / w; val cc = cur % w
+                if (cr > 0 && fg[cur - w] && !visited[cur - w]) { visited[cur - w] = true; q[tail++] = cur - w }
+                if (cr + 1 < h && fg[cur + w] && !visited[cur + w]) { visited[cur + w] = true; q[tail++] = cur + w }
+                if (cc > 0 && fg[cur - 1] && !visited[cur - 1]) { visited[cur - 1] = true; q[tail++] = cur - 1 }
+                if (cc + 1 < w && fg[cur + 1] && !visited[cur + 1]) { visited[cur + 1] = true; q[tail++] = cur + 1 }
+            }
+            compSizes.add(q.copyOf(tail))
+        }
+        if (compSizes.isEmpty()) return
+        var maxSz = 0
+        for (comp in compSizes) if (comp.size > maxSz) maxSz = comp.size
+        val thresh = max(minAbs, (maxSz * minFrac).toInt())
+        fg.fill(false)
+        for (comp in compSizes) {
+            if (comp.size >= thresh) {
+                for (p in comp) fg[p] = true
+            }
+        }
+    }
+
+    /**
+     * 沿 4 组对向轴（水平、垂直、正斜、反斜）计算 O(W*H) 有向距离，
+     * 凡在 >= minAxes 条轴上两侧均为前景且总跨度 <= maxSpanFrac * max(W, H) 的背景凹槽，判定为被主体半包围的阴影（如猫颈、耳窝），予以桥接闭合。
+     */
+    private fun healConcaveBays(
+        fg: BooleanArray,
+        w: Int,
+        h: Int,
+        maxSpanFrac: Float,
+        minAxes: Int
+    ): BooleanArray {
+        val n = w * h
+        val inf = 99999
+        val maxSpan = max(10, (max(w, h) * maxSpanFrac).roundToInt())
+        val axes = arrayOf(
+            intArrayOf(0, -1, 0, 1),
+            intArrayOf(-1, 0, 1, 0),
+            intArrayOf(-1, -1, 1, 1),
+            intArrayOf(-1, 1, 1, -1)
+        )
+        fun distInDir(dr: Int, dc: Int): IntArray {
+            val d = IntArray(n) { inf }
+            val rRange = if (dr <= 0) (0 until h) else (h - 1 downTo 0)
+            val cRange = if (dc <= 0) (0 until w) else (w - 1 downTo 0)
+            for (r in rRange) {
+                for (c in cRange) {
+                    val i = r * w + c
+                    if (fg[i]) {
+                        d[i] = 0
+                    } else {
+                        val pr = r + dr
+                        val pc = c + dc
+                        if (pr in 0 until h && pc in 0 until w) {
+                            val pd = d[pr * w + pc]
+                            if (pd < inf) d[i] = pd + 1
+                        }
+                    }
+                }
+            }
+            return d
+        }
+        val enclosed = IntArray(n)
+        for (ax in axes) {
+            val d1 = distInDir(ax[0], ax[1])
+            val d2 = distInDir(ax[2], ax[3])
+            val limit = if (ax[0] != 0 && ax[1] != 0) (maxSpan / 1.414f).toInt() else maxSpan
+            for (i in 0 until n) {
+                if (!fg[i] && d1[i] < inf && d2[i] < inf && d1[i] + d2[i] <= limit) {
+                    enclosed[i]++
+                }
+            }
+        }
+        return BooleanArray(n) { i -> fg[i] || enclosed[i] >= minAxes }
     }
 
     private fun reduceToColorCap(

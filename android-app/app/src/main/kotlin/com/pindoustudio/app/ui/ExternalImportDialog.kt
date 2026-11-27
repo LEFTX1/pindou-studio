@@ -1,8 +1,6 @@
 package com.pindoustudio.app.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -67,7 +65,7 @@ fun ExternalImportDialog(
     if (!state.showExternalImportDialog) return
 
     val picker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
+        contract = GalleryImagePickerContract()
     ) { uri ->
         if (uri != null) viewModel.pickExternalImportUri(uri)
     }
@@ -130,7 +128,7 @@ fun ExternalImportDialog(
 
                 Button(
                     onClick = {
-                        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        picker.launch(Unit)
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = TerracottaAccent)

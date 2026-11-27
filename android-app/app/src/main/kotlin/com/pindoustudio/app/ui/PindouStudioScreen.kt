@@ -1,8 +1,6 @@
 package com.pindoustudio.app.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -776,7 +774,7 @@ private fun PhotoConvertTab(
     viewModel: PindouViewModel
 ) {
     val photoPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
+        contract = GalleryImagePickerContract()
     ) { uri ->
         if (uri != null) viewModel.setConvertSourceUri(uri)
     }
@@ -846,7 +844,7 @@ private fun PhotoConvertTab(
                 ) {
                     Text("当前图片：${state.convertSourceName}", fontSize = 12.sp, color = InkMuted)
                     OutlinedButton(onClick = {
-                        photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        photoPicker.launch(Unit)
                     }) {
                         Text("从相册换图")
                     }

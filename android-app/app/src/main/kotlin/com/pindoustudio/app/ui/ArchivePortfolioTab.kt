@@ -2,8 +2,6 @@ package com.pindoustudio.app.ui
 
 import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -95,7 +93,7 @@ fun ArchivePortfolioTab(
     var renameTarget by remember { mutableStateOf<PortfolioWork?>(null) }
 
     val slotPhotoPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
+        contract = GalleryImagePickerContract()
     ) { uri ->
         val target = pendingPickTarget
         pendingPickTarget = null
@@ -225,9 +223,7 @@ fun ArchivePortfolioTab(
                             lightboxTarget = work to slot
                         } else {
                             pendingPickTarget = work.id to slot
-                            slotPhotoPicker.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
+                            slotPhotoPicker.launch(Unit)
                         }
                     },
                     onToggleCompleted = { viewModel.togglePortfolioCompleted(work.id) },
@@ -254,9 +250,7 @@ fun ArchivePortfolioTab(
                 onReplace = {
                     lightboxTarget = null
                     pendingPickTarget = latestWork.id to slot
-                    slotPhotoPicker.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    )
+                    slotPhotoPicker.launch(Unit)
                 },
                 onRemove = {
                     lightboxTarget = null
